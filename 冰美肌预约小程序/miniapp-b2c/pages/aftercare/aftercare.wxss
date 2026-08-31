@@ -1,0 +1,99 @@
+.page {
+  padding: 24rpx 24rpx calc(120rpx + env(safe-area-inset-bottom));
+  min-height: 100vh;
+  background: var(--gray-100);
+  box-sizing: border-box;
+}
+
+/* 正常反应卡片 */
+.reaction-card {
+  padding: 28rpx 32rpx;
+  background: #FFFFFF;
+  border-radius: 16rpx;
+  border: 1rpx solid #E5E7EB;
+  border-left: 6rpx solid #60A5FA;
+}
+.reaction-title {
+  font-size: 30rpx;
+  font-weight: 700;
+  color: #2563EB;
+  margin-bottom: 10rpx;
+}
+.reaction-text {
+  font-size: 28rpx;
+  color: var(--text-secondary);
+  line-height: 1.7;
+}
+
+/* Tab 切换 */
+.tab-bar {
+  display: flex;
+  background: #FFFFFF;
+  border-radius: 12rpx;
+  padding: 8rpx;
+  margin-bottom: 24rpx;
+  box-shadow: 0 2rpx 12rpx rgba(0,0,0,0.06);
+}
+.tab {
+  flex: 1;
+  text-align: center;
+  padding: 20rpx 0;
+  font-size: 28rpx;
+  color: var(--text-muted);
+  border-radius: 10rpx;
+  font-weight: 500;
+}
+.tab.active {
+  background: var(--text-brand);
+  color: #FFFFFF;
+  font-weight: 600;
+}
+
+/* 内容容器 */
+.tab-content {
+  display: flex;
+  flex-direction: column;
+  gap: 20rpx;
+}
+
+/* ===== 卡片（统一风格） ===== */
+.section-card {
+  padding: 28rpx 32rpx;
+  background: #FFFFFF;
+  border-radius: 16rpx;
+  border: 1rpx solid #E5E7EB;
+}
+
+/* ===== 标题 ===== */
+.section-title {
+  font-size: 30rpx;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 18rpx;
+  display: block;
+}
+
+/* ===== 条目列表 ===== */
+.item-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
+}
+
+.item {
+  position: relative;
+  padding-left: 24rpx;
+  font-size: 28rpx;
+  color: var(--text-secondary);
+  line-height: 1.8;
+}
+.item::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 14rpx;
+  width: 8rpx;
+  height: 8rpx;
+  border-radius: 50%;
+  background: #D1D5DB;
+}

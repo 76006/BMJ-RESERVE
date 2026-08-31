@@ -1,0 +1,19 @@
+# Local assistant/developer state
+.workbuddy/
+**/project.private.config.json
+
+# Dependencies and caches
+**/node_modules/
+**/__pycache__/
+*.py[cod]
+*.log
+
+# Generated/intermediate artifacts
+冰美肌预约小程序/miniapp-b2c/unpacked_todo/
+**/preview-qr.png
+
+# OS/editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

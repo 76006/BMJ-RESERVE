@@ -1,0 +1,93 @@
+<!-- ===== 顶部导航 ===== -->
+<nav-bar title="预约管理" showBack="{{true}}"></nav-bar>
+<view class="admin-header">
+  <view class="admin-sub">共 {{totalCount}} 条体验记录</view>
+  <view class="admin-actions">
+    <view class="action-btn btn-green" bindtap="exportData">导出数据</view>
+  </view>
+</view>
+
+<!-- ===== 状态筛选 ===== -->
+<scroll-view scroll-x class="filter-bar">
+  <view class="filter-item {{filterStatus === 'all' ? 'active' : ''}}" data-status="all" bindtap="setFilter">
+    全部 ({{statusCounts.all || 0}})
+  </view>
+  <view class="filter-item urgent {{filterStatus === 'pending_confirm' ? 'active' : ''}}" data-status="pending_confirm" bindtap="setFilter">
+    新预约 ({{statusCounts.pending_confirm || 0}})
+  </view>
+  <view class="filter-item {{filterStatus === 'confirmed' ? 'active' : ''}}" data-status="confirmed" bindtap="setFilter">
+    已预约 ({{statusCounts.confirmed || 0}})
+  </view>
+  <view class="filter-item {{filterStatus === 'visited' ? 'active' : ''}}" data-status="visited" bindtap="setFilter">
+    已到店 ({{statusCounts.visited || 0}})
+  </view>
+  <view class="filter-item {{filterStatus === 'in_experience' ? 'active' : ''}}" data-status="in_experience" bindtap="setFilter">
+    体验中 ({{statusCounts.in_experience || 0}})
+  </view>
+  <view class="filter-item {{filterStatus === 'completed' ? 'active' : ''}}" data-status="completed" bindtap="setFilter">
+    已体验 ({{statusCounts.completed || 0}})
+  </view>
+  <view class="filter-item {{filterStatus === 'cancelled' ? 'active' : ''}}" data-status="cancelled" bindtap="setFilter">
+    已取消 ({{statusCounts.cancelled || 0}})
+  </view>
+</scroll-view>
+
+<!-- ===== 预约列表 ===== -->
+<view wx:if="{{bookings.length === 0}}" class="empty">
+  <text class="empty-icon">📭</text>
+  <text class="empty-text">暂无该状态的记录</text>
+</view>
+
+<view wx:else class="list">
+  <view class="card" wx:for="{{bookings}}" wx:key="id" data-id="{{item.id}}" bindtap="goDetail">
+    <view class="card-top">
+      <view class="card-name">{{item.name}} {{item.gender}} {{item.age}}岁</view>
+      <view class="card-badges">
+        <view class="card-status status-{{item._status}}">
+          {{item._status === 'pending_confirm' ? '新预约' : ''}}{{item._status === 'confirmed' ? '已预约' : ''}}{{item._status === 'visited' ? '已到店' : ''}}{{item._status === 'in_experience' ? '体验中' : ''}}{{item._status === 'completed' ? '已体验' : ''}}{{item._status === 'cancelled' ? '已取消' : ''}}
+        </view>
+        <view wx:if="{{item.channel && item.channel !== 'direct'}}" class="card-channel-tag">{{item.channel === 'medical' ? '医疗' : '生美'}}</view>
+        <view wx:if="{{item._immediateSatisfaction}}" class="card-exp-tag">已补录</view>
+      </view>
+    </view>
+    <view class="card-row">
+      <text class="card-label">体验时间</text>
+      <text class="card-value">{{item.visitDate}} {{item.visitTime}}</text>
+    </view>
+    <view class="card-row">
+      <text class="card-label">电话</text>
+      <text class="card-value">{{item.phone}}</text>
+    </view>
+    <view class="card-row">
+      <text class="card-label">改善需求</text>
+      <text class="card-value">{{item.needs}}</text>
+    </view>
+    <view class="card-row" wx:if="{{item.trainerName}}">
+      <text class="card-label">来源培训师</text>
+      <text class="card-value">{{item.trainerName}}</text>
+    </view>
+    <view class="card-row" wx:if="{{item._clientManager}}">
+      <text class="card-label">负责人</text>
+      <text class="card-value">{{item._clientManager}}</text>
+    </view>
+    <view class="card-note" wx:if="{{item._adminNote}}">
+      <view class="note-tag">内部备注</view>
+      <text>{{item._adminNote}}</text>
+    </view>
+    <!-- 新预约快捷操作 -->
+    <view class="card-confirm-bar" wx:if="{{item._status === 'pending_confirm'}}" catchtap="onConfirmTap" data-id="{{item.id}}">
+      <text class="confirm-btn-text">✓ 确认该预约时间</text>
+    </view>
+    <view class="card-reject-bar" wx:if="{{item._status === 'pending_confirm'}}" catchtap="onRejectTap" data-id="{{item.id}}">
+      <text class="reject-btn-text">✕ 拒绝该预约</text>
+    </view>
+    <!-- 重新预约（已取消状态显示） -->
+    <view class="card-rebook-bar" wx:if="{{item._status === 'cancelled'}}" catchtap="onRebookTap" data-id="{{item.id}}">
+      <text class="rebook-btn-text">🔄 重新预约</text>
+    </view>
+    <!-- 测试签到（模拟顾客扫码） -->
+    <view class="card-test-bar" catchtap="simulateCheckIn" data-id="{{item.id}}">
+      <text class="test-btn-text">🧪 模拟顾客扫码签到</text>
+    </view>
+  </view>
+</view>

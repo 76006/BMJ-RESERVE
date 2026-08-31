@@ -1,0 +1,524 @@
+.mine-header {
+  position: relative;
+  height: 560rpx;
+  overflow: hidden;
+}
+.mine-hero-bg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.mine-hero-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, transparent 30%, rgba(0,0,0,0.45) 100%);
+}
+.avatar-area {
+  position: absolute;
+  bottom: 56rpx;
+  left: 0;
+  right: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12rpx;
+}
+.avatar {
+  width: 120rpx; height: 120rpx;
+  line-height: 120rpx;
+  text-align: center;
+  background: rgba(255,255,255,0.18);
+  border-radius: 50%;
+  font-size: 56rpx;
+  border: 2rpx solid rgba(255,255,255,0.25);
+}
+.welcome {
+  font-size: 28rpx;
+  color: #fff;
+  font-weight: 500;
+  text-shadow: 0 2rpx 8rpx rgba(0,0,0,0.5);
+}
+.visit-info {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6rpx;
+}
+.visit-count {
+  font-size: 24rpx;
+  color: rgba(255,255,255,0.85);
+}
+.last-visit {
+  font-size: 22rpx;
+  color: rgba(255,255,255,0.6);
+}
+.brand {
+  font-size: 40rpx;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: 4rpx;
+  text-shadow: 0 2rpx 8rpx rgba(0,0,0,0.5);
+}
+
+/* 基本资料 */
+.profile-section { background: var(--bg); }
+.profile-card {
+  background: #fff;
+  border-radius: 20rpx;
+  padding: 8rpx 0;
+  box-shadow: var(--shadow-sm);
+}
+.profile-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 24rpx 32rpx;
+}
+.profile-row + .profile-row {
+  border-top: 1rpx solid var(--gray-100);
+}
+.profile-label {
+  font-size: 30rpx;
+  color: var(--text-muted);
+}
+.profile-value {
+  font-size: 30rpx;
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+/* Records */
+.records { background: var(--bg); }
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 20rpx 0;
+}
+.empty-icon { font-size: 80rpx; margin-bottom: 16rpx; }
+.empty-text { font-size: 28rpx; color: var(--mid-gray); }
+
+.booking-list { display: flex; flex-direction: column; gap: 16rpx; }
+.booking-card {
+  background: white;
+  border-radius: 20rpx;
+  padding: 32rpx;
+  box-shadow: var(--shadow-sm);
+}
+.booking-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24rpx;
+  padding-bottom: 20rpx;
+  border-bottom: 1rpx solid var(--light-gray);
+}
+.booking-id { font-size: 24rpx; color: var(--mid-gray); }
+.booking-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24rpx;
+  font-weight: 600;
+  padding: 8rpx 20rpx;
+  border-radius: var(--radius-full);
+  background: var(--gray-100);
+  color: var(--text-secondary);
+}
+.status-pending-confirm { background: var(--brand-soft-blue); color: var(--text-brand); }
+.status-confirmed { background: var(--green-bg); color: var(--status-green); }
+.visited { background: var(--gray-100); color: var(--text-secondary); }
+.in-experience { background: var(--brand-soft-blue); color: var(--text-brand); }
+.completed { background: var(--gray-100); color: var(--text-secondary); }
+.cancelled { background: var(--red-bg); color: var(--red-dark); }
+.booking-body { display: flex; flex-direction: column; gap: 12rpx; }
+.booking-row { display: flex; align-items: flex-start; }
+.booking-label {
+  width: 80rpx;
+  font-size: 28rpx;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+.booking-value { font-size: 28rpx; color: var(--text-primary); }
+.booking-footer {
+  margin-top: 20rpx;
+  padding-top: 16rpx;
+  border-top: 1rpx dashed var(--gray-200);
+}
+.booking-tap-hint {
+  font-size: 24rpx;
+  color: var(--brand-cyan);
+  font-weight: 600;
+}
+.booking-tap-hint.dim {
+  color: var(--gray-300);
+  font-weight: 400;
+}
+.booking-action {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  padding: 14rpx 0;
+  margin-bottom: 4rpx;
+  min-height: 68rpx;
+}
+.booking-tap-sub {
+  font-size: 24rpx; color: var(--text-light);
+}
+
+/* 预约状态扩展 */
+.booking-status.status-confirmed {
+  background: var(--green-bg);
+  color: var(--green-dark);
+}
+.booking-confirm-hint {
+  font-size: 24rpx;
+  color: var(--amber-dark);
+  background: #FFFBEB;
+  border-left: 4rpx solid var(--amber);
+  padding: 12rpx 16rpx;
+  margin: 8rpx 0;
+  border-radius: 0 8rpx 8rpx 0;
+}
+.booking-confirmed-hint {
+  font-size: 24rpx;
+  color: var(--green-dark);
+  background: var(--green-bg);
+  border-left: 4rpx solid var(--green);
+  padding: 12rpx 16rpx;
+  margin: 8rpx 0;
+  border-radius: 0 8rpx 8rpx 0;
+}
+
+/* 管理员扫码入口 */
+.admin-entry {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  padding: 24rpx 28rpx;
+  margin: 0 24rpx;
+  background: #fff;
+  border-radius: 16rpx;
+  box-shadow: var(--shadow-sm);
+}
+.admin-entry-icon { font-size: 36rpx; }
+.admin-entry-text { flex: 1; font-size: 26rpx; color: var(--text-muted); }
+.admin-entry-arrow { font-size: 32rpx; color: var(--gray-300); }
+
+/* Service */
+.service { background: white; }
+.service-grid { display: flex; gap: 16rpx; }
+.service-card {
+  flex: 1;
+  text-align: center;
+  padding: 20rpx 24rpx;
+  background: var(--bg);
+  border-radius: 20rpx;
+}
+.service-icon-text { font-size: 48rpx; display: block; margin-bottom: 12rpx; }
+.service-name { font-size: 30rpx; font-weight: 700; color: var(--text-primary); margin-bottom: 8rpx; }
+.service-detail { font-size: 26rpx; color: var(--text-muted); }
+
+/* 数据管理 */
+.data-mgmt { background: white; margin-top: 24rpx; }
+.data-item {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  padding: 24rpx 0;
+  border-bottom: 1rpx solid var(--gray-100);
+}
+.data-item:last-child { border-bottom: none; }
+.data-item-icon { font-size: 36rpx; }
+.data-item-body { flex: 1; }
+.data-item-title { font-size: 28rpx; color: var(--text-primary); font-weight: 500; display: block; }
+.data-item-desc { font-size: 24rpx; color: var(--text-muted); margin-top: 4rpx; display: block; }
+.data-item-arrow { font-size: 32rpx; color: var(--gray-300); }
+
+/* ===== section-title（如全局未定义则补充） ===== */
+.section-title {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 20rpx;
+  padding: 0 8rpx;
+}
+
+/* ========================================== */
+/* 登录卡片 */
+/* ========================================== */
+.login-area {
+  background: transparent;
+  padding: 0 24rpx;
+  margin-top: 40rpx;
+}
+.login-card {
+  background: transparent;
+  text-align: center;
+}
+.login-btn {
+  width: 100%;
+  height: 96rpx;
+  line-height: 96rpx;
+  background: var(--gradient);
+  color: var(--text-on-brand);
+  font-size: 30rpx;
+  font-weight: 700;
+  letter-spacing: 6rpx;
+  border-radius: 16rpx;
+  border: none;
+  padding: 0;
+  text-align: center;
+  box-shadow: var(--shadow-brand);
+}
+.login-btn::after { border: none; }
+
+/* ========================================== */
+/* 视角切换器 */
+/* ========================================== */
+.role-switcher {
+  display: flex;
+  gap: 12rpx;
+  padding: 16rpx 24rpx;
+  background: #fff;
+  margin: 0 24rpx;
+  border-radius: 16rpx;
+  box-shadow: var(--shadow-sm);
+}
+.role-tab {
+  flex: 1;
+  text-align: center;
+  padding: 16rpx 0;
+  border-radius: 12rpx;
+  font-size: 24rpx;
+  color: var(--text-muted);
+  background: var(--gray-50);
+  transition: all 0.2s;
+}
+.role-tab.active {
+  background: var(--brand-soft-blue);
+  color: var(--brand-blue);
+  font-weight: 600;
+}
+
+/* 开发工具视角切换条 */
+.dev-role-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16rpx 24rpx;
+  margin: 0 24rpx;
+  background: #FFFBEB;
+  border-radius: 12rpx;
+}
+.dev-role-hint {
+  font-size: 24rpx;
+  color: var(--amber-dark);
+}
+.dev-role-btn {
+  font-size: 24rpx;
+  padding: 10rpx 24rpx;
+  background: var(--text-brand);
+  color: var(--text-on-brand);
+  border-radius: 8rpx;
+}
+.dev-role-btn-outline {
+  background: transparent;
+  color: var(--text-brand);
+  border: 2rpx solid var(--text-brand);
+}
+
+/* ========================================== */
+/* 操作师视图 */
+/* ========================================== */
+
+/* 工作台概览 */
+.admin-overview {
+  padding: 32rpx 24rpx;
+}
+.overview-grid {
+  display: flex;
+  gap: 16rpx;
+}
+.overview-card {
+  flex: 1;
+  text-align: center;
+  padding: 36rpx 16rpx;
+  background: white;
+  border-radius: 20rpx;
+  box-shadow: var(--shadow-sm);
+}
+.overview-card.urgent {
+  background: #FFFBEB;
+  border: 2rpx solid #FDE68A;
+}
+.overview-num {
+  font-size: 52rpx;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.2;
+}
+.overview-card.urgent .overview-num {
+  color: var(--amber-dark);
+}
+.overview-label {
+  font-size: 24rpx;
+  color: var(--text-muted);
+  margin-top: 8rpx;
+}
+
+/* 快捷入口 */
+.admin-shortcuts {
+  background: white;
+  margin-top: 24rpx;
+}
+.shortcut-item {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  padding: 28rpx 32rpx;
+  border-bottom: 1rpx solid var(--gray-100);
+}
+.shortcut-item:last-child { border-bottom: none; }
+.shortcut-icon { font-size: 40rpx; }
+.shortcut-text {
+  flex: 1;
+  font-size: 28rpx;
+  color: var(--text-primary);
+}
+.shortcut-arrow {
+  width: 14rpx;
+  height: 14rpx;
+  border-right: 3rpx solid #D1D5DB;
+  border-top: 3rpx solid #D1D5DB;
+  transform: rotate(45deg);
+  margin-left: 12rpx;
+}
+
+/* 给操作师/管理员视图底部留足够安全距离，避免底部手势冲突 */
+.admin-bottom-space {
+  height: calc(80rpx + env(safe-area-inset-bottom));
+}
+
+/* 今日排期 */
+.today-schedule {
+  background: white;
+  margin-top: 24rpx;
+  padding: 32rpx 24rpx;
+}
+.schedule-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
+}
+.schedule-item {
+  display: flex;
+  align-items: center;
+  gap: 20rpx;
+  padding: 24rpx;
+  background: var(--gray-50);
+  border-radius: 16rpx;
+}
+.schedule-time {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: var(--text-primary);
+  min-width: 140rpx;
+}
+.schedule-info { flex: 1; }
+.schedule-name {
+  font-size: 28rpx;
+  color: var(--text-primary);
+  font-weight: 500;
+}
+.schedule-meta {
+  font-size: 24rpx;
+  color: var(--mid-gray);
+  margin-top: 4rpx;
+}
+.schedule-arrow { font-size: 36rpx; color: var(--gray-300); }
+
+/* 退出登录 */
+.logout-section {
+  margin-top: 24rpx;
+  padding: 0 24rpx 32rpx;
+}
+.logout-btn {
+  text-align: center;
+  padding: 28rpx;
+  background: white;
+  border-radius: 16rpx;
+  font-size: 28rpx;
+  color: var(--red);
+  box-shadow: var(--shadow-sm);
+}
+
+/* 企业微信客服二维码弹窗 */
+.qr-mask {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+.qr-box {
+  position: relative;
+  width: 560rpx;
+  background: #fff;
+  border-radius: 24rpx;
+  padding: 48rpx 40rpx 40rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.qr-close {
+  position: absolute;
+  top: 20rpx;
+  right: 28rpx;
+  font-size: 36rpx;
+  color: var(--gray-300);
+  line-height: 1;
+}
+.qr-title {
+  font-size: 32rpx;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 28rpx;
+}
+.qr-img {
+  width: 360rpx;
+  height: 360rpx;
+  background: var(--gray-50);
+  border-radius: 12rpx;
+}
+.qr-tip {
+  font-size: 26rpx;
+  color: var(--text-muted);
+  margin-top: 24rpx;
+  text-align: center;
+}
+.qr-actions {
+  display: flex;
+  gap: 20rpx;
+  margin-top: 32rpx;
+  width: 100%;
+}
+.qr-btn {
+  flex: 1;
+  height: 80rpx;
+  line-height: 80rpx;
+  font-size: 28rpx;
+  border-radius: 12rpx;
+  background: var(--gradient);
+  color: var(--text-on-brand);
+  border: none;
+}
+.qr-btn::after { border: none; }
+.qr-btn-ghost {
+  background: var(--gray-100);
+  color: var(--text-secondary);
+}

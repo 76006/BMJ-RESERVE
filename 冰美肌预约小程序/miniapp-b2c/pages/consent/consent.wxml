@@ -1,0 +1,207 @@
+<nav-bar title="体验知情同意书" showBack="{{true}}"></nav-bar>
+<!-- 知情同意书（平铺展示） -->
+<view class="page">
+  <view class="consent-card">
+
+    <!-- 标题 -->
+    <view class="consent-header">
+      <text class="consent-title">知情同意书</text>
+      <text class="consent-subtitle">冰美肌 · 美容仪器体验</text>
+    </view>
+
+    <!-- 可滚动正文区 -->
+    <scroll-view class="consent-body flat" scroll-y bindscroll="onScroll" bindscrolltolower="onScrollToLower">
+
+      <!-- 引言 -->
+      <view class="sec-intro">
+        <text class="p">尊敬的顾客：您好！为了保障您的合法权益，确保您充分了解并同意即将使用的美容仪器及其可能带来的益处与风险，我司特此向您提供本《知情同意书》。请您在仔细阅读以下内容后，做出明智的决定，并在必要时与我司进行充分沟通。</text>
+      </view>
+
+      <!-- 一、基本信息 -->
+      <view class="section">
+        <view class="section-title">一、基本信息</view>
+        <view class="sec-body">
+          <view class="info-row"><text class="info-label">姓名：{{bookingData.name || '________________'}}</text></view>
+          <view class="info-row">
+            <text class="info-label">性别：{{bookingData.gender || '________________'}}</text>
+            <text class="info-gap"></text>
+            <text class="info-label">年龄：{{bookingData.age || '________________'}}</text>
+          </view>
+          <view class="info-row"><text class="info-label">身份证号码：{{bookingData.idCard || '________________'}}</text></view>
+          <view class="info-row"><text class="info-label">联系方式：{{bookingData.phone || '________________'}}</text></view>
+          <view class="info-row"><text class="info-label">预约时间：{{bookingData.visitDate || '________________'}} {{bookingData.visitTime || ''}}</text></view>
+        </view>
+      </view>
+
+      <!-- 二、预期效果及目的 -->
+      <view class="section">
+        <view class="section-title">二、预期效果及目的</view>
+        <view class="sec-body"><text class="p">使用此美容仪器的预期效果为：展现紧实饱满，改善皮肤质感。</text></view>
+      </view>
+
+      <!-- 三、潜在风险 -->
+      <view class="section">
+        <view class="section-title">三、潜在风险</view>
+        <view class="sec-body">
+          <text class="p">在使用的过程中，将无法规避以下情形产生的可能性：</text>
+          <view class="risk-list">
+            <text class="risk-item">· 皮肤暂时性红肿或灼热感，皮肤暂时性干燥或紧绷感</text>
+            <text class="risk-item">· 个别使用者可能出现轻微疼痛</text>
+            <text class="risk-item">· 痤疮程度加重</text>
+          </view>
+          <text class="p risk-note">以上为常见短暂反应，通常在数小时至数日内消退。如出现持续不适，请立即联系操作师。</text>
+        </view>
+      </view>
+
+      <!-- 四、不建议体验的情况（重要） -->
+      <view class="section">
+        <view class="section-title">四、不建议体验的情况（重要）</view>
+        <view class="sec-body">
+          <text class="p">以下情况禁止体验本仪器：</text>
+          <view class="contra-group">
+            <text class="contra-label">【绝对禁止】</text>
+            <text class="contra-item">· 体内有金属植入物（包括金属镶牙）、有源植入物的人群，不可以进行体验</text>
+            <text class="contra-item">· 植入心脏起搏器、除颤器的人群不能进行体验，也不要靠近设备工作的地方</text>
+            <text class="contra-item">· 备孕、哺乳期或妊娠妇女禁止体验</text>
+          </view>
+          <view class="contra-group">
+            <text class="contra-label">【身体状况限制】</text>
+            <text class="contra-item">· 热敏感/瘢痕体质者禁止体验</text>
+            <text class="contra-item">· 3月内做过激光化学换肤术者禁止体验</text>
+            <text class="contra-item">· 测试部位存在伤口、表皮破溃、疱疹/毛囊炎等皮肤感染患者禁止体验</text>
+            <text class="contra-item">· 有糖尿病、肿瘤、哮喘、自身免疫性疾病及其他严重器质性疾病或精神疾病患者禁止体验</text>
+          </view>
+          <view class="contra-group">
+            <text class="contra-label">【用药限制】</text>
+            <text class="contra-item">· 近1周内使用口服抗组胺药者</text>
+            <text class="contra-item">· 近2个月内受试部位应用任何抗炎药物者</text>
+            <text class="contra-item">· 近三个月内使用类维生素A、α羟基酸、水杨酸、对苯二酚等药物者</text>
+            <text class="contra-item">· 操作师判断的其他不适合参加本次体验活动的情况</text>
+          </view>
+          <text class="p contra-judge">操作师判断依据：基于企业内部标准化培训流程及操作规范。如顾客对判断有异议，可要求提供书面说明。</text>
+        </view>
+      </view>
+
+      <!-- 五、您的权利与义务 -->
+      <view class="section">
+        <view class="section-title">五、您的权利与义务</view>
+        <view class="sec-body">
+          <view class="num-list">
+            <view class="num-item">
+              <text class="num">1.</text>
+              <text class="num-text">您有权了解所使用的美容仪器的全部信息，包括但不限于其性能、安全性、预期效果及可能的风险。</text>
+            </view>
+            <view class="num-item">
+              <text class="num">2.</text>
+              <text class="num-text">您应如实向我司工作人员反映自己的健康状况和过敏史，以便我们评估是否适合使用该美容仪器。</text>
+            </view>
+            <view class="num-item">
+              <text class="num">3.</text>
+              <text class="num-text">在使用的过程中，如您感到任何不适或异常反应，应立即告知我司工作人员。您可以自愿决定在体验的任何阶段退出。</text>
+            </view>
+          </view>
+        </view>
+      </view>
+
+      <!-- 六、保密责任 + 摄影授权 -->
+      <view class="section">
+        <view class="section-title">六、保密责任</view>
+        <view class="sec-body">
+          <text class="p">在整个体验过程中，您的个人身份和资料我司会始终为您保密。在任何时候，您可以要求查阅您的个人信息，如有需要，可以修改这些信息。同时，您在体验过程中所了解的与设备有关的商业信息请勿对外泄露。</text>
+          <view class="photo-auth">
+            <text class="photo-auth-title">【摄影授权】以下关于拍摄及宣传使用的授权需您单独确认：</text>
+            <view class="photo-item" bindtap="togglePhotoAuth1">
+              <view class="photo-check {{photoAuth1 ? 'checked' : ''}}"><text wx:if="{{photoAuth1}}">✓</text></view>
+              <text class="photo-text">我同意工作人员在体验过程中拍摄照片用于个人护理记录存档</text>
+            </view>
+            <view class="photo-item" bindtap="togglePhotoAuth2">
+              <view class="photo-check {{photoAuth2 ? 'checked' : ''}}"><text wx:if="{{photoAuth2}}">✓</text></view>
+              <text class="photo-text">我同意将经匿名处理（不露全脸/不显示身份信息）的效果对比照片用于产品宣传展示</text>
+            </view>
+            <text class="photo-note">如选择不同意，照片仅用于个人存档，不会用于任何对外展示。</text>
+          </view>
+        </view>
+      </view>
+
+      <!-- 七、免责声明 -->
+      <view class="section">
+        <view class="section-title">七、免责声明</view>
+        <view class="sec-body">
+          <view class="num-list">
+            <view class="num-item">
+              <text class="num">1.</text>
+              <text class="num-text">如因体验者未如实告知健康状况、不建议体验的情况或用药史，导致体验过程中或体验后发生不良反应或损害，由体验者自行承担相应后果。</text>
+            </view>
+            <view class="num-item">
+              <text class="num">2.</text>
+              <text class="num-text">体验过程中如发生非因操作师过失导致的意外情况，我司将立即采取合理急救措施，但不承担超出合理范围的赔偿责任。</text>
+            </view>
+            <view class="num-item">
+              <text class="num">3.</text>
+              <text class="num-text">体验后未遵医嘱或护理建议所产生的不良反应，不属我司责任范围。</text>
+            </view>
+            <view class="num-item">
+              <text class="num">4.</text>
+              <text class="num-text">本声明不排除或限制法律禁止排除或限制的我方责任。</text>
+            </view>
+          </view>
+        </view>
+      </view>
+
+      <!-- 八、撤回与注销 -->
+      <view class="section">
+        <view class="section-title">八、撤回与注销</view>
+        <view class="sec-body">
+          <view class="num-list">
+            <view class="num-item">
+              <text class="num">1.</text>
+              <text class="num-text">您有权在签署后的任何时间书面通知我司撤回本知情同意书的签署。撤回后，您已提供的个人信息将按《隐私政策》处理。</text>
+            </view>
+            <view class="num-item">
+              <text class="num">2.</text>
+              <text class="num-text">撤回不影响撤回前已发生的体验行为的合法性。</text>
+            </view>
+            <view class="num-item">
+              <text class="num">3.</text>
+              <text class="num-text">撤回申请可通过以下方式提出：联系现场工作人员，或发送邮件至客服邮箱。</text>
+            </view>
+          </view>
+        </view>
+      </view>
+
+      <!-- 九、签署声明 -->
+      <view class="section">
+        <view class="section-title">九、签署声明</view>
+        <view class="sec-body">
+          <text class="p">签署这份知情同意书前，作为相关美容仪器的体验者，我已经阅读过以上所有内容。我确认已有充分的时间考虑，所有的疑问都已得到圆满的解答，我没有上文提到的不建议体验的情况，我自愿参加并亲身体验相关美容仪器的护理服务，接受因此产生的预期效果并承担一切可能存在的风险。</text>
+        </view>
+      </view>
+
+      <!-- 签署行 -->
+      <view class="sign-line">
+        <text class="sign-text">签署人：{{bookingData.name || '________________'}}    签署日期：{{bookingData.visitDate || '________________'}}</text>
+      </view>
+
+    </scroll-view>
+
+    <!-- 全部阅读确认 -->
+    <view class="all-read" bindtap="toggleAllRead">
+      <view class="checkbox {{allRead ? 'checked' : ''}}"><text wx:if="{{allRead}}">✓</text></view>
+      <text class="all-read-text">我已完整阅读并理解以上全部内容</text>
+    </view>
+    <view class="scroll-hint" wx:if="{{!scrolledBottom}}">
+      <text class="scroll-hint-text">↓ 请下滑浏览全文至底部</text>
+    </view>
+
+    <!-- 按钮 -->
+    <view class="actions">
+      <view class="btn-confirm {{allRead ? '' : 'disabled'}}" bindtap="confirmConsent">确认签署</view>
+    </view>
+
+    <!-- 护理须知入口 -->
+    <view class="aftercare-link" bindtap="goAftercare">
+      <text class="link-text">查看护理须知 →</text>
+    </view>
+
+  </view>
+</view>

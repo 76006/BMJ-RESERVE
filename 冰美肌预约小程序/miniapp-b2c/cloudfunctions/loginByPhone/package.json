@@ -1,0 +1,9 @@
+{
+  "name": "loginByPhone",
+  "version": "1.0.0",
+  "description": "手机号登录 + 角色自动识别",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "latest"
+  }
+}

@@ -1,0 +1,55 @@
+<nav-bar title="现场签到" showBack="{{true}}"></nav-bar>
+<!-- 顾客签到（方案B：扫小程序码 → 知情同意书 → 欢迎页） -->
+<view class="page">
+
+  <!-- 欢迎完成页 -->
+  <view class="ci-welcome" wx:if="{{done}}">
+    <view class="welcome-icon">✨</view>
+    <text class="welcome-title">欢迎体验冰美肌</text>
+    <text class="welcome-sub">请稍候，工作人员将为您安排体验</text>
+    <view class="welcome-info" wx:if="{{booking}}">
+      <text class="wi-text">{{booking.name}}，{{booking.visitDate}} {{booking.visitTime}}</text>
+    </view>
+  </view>
+
+  <!-- 知情同意书未签署提示 -->
+  <block wx:elif="{{needConsent && booking}}">
+    <view class="ci-header">
+      <view class="ci-title">到店签到</view>
+      <view class="ci-sub">欢迎光临，请先签署知情同意书</view>
+    </view>
+
+    <view class="ci-card">
+      <view class="ci-card-title">预约信息</view>
+      <view class="ci-row">
+        <text class="ci-label">姓名</text>
+        <text class="ci-value">{{booking.name}} {{booking.gender}} {{booking.age}}岁</text>
+      </view>
+      <view class="ci-row">
+        <text class="ci-label">预约时间</text>
+        <text class="ci-value">{{booking.visitDate}} {{booking.visitTime}}</text>
+      </view>
+      <view class="ci-row">
+        <text class="ci-label">改善需求</text>
+        <text class="ci-value">{{booking.needs || '未填写'}}</text>
+      </view>
+    </view>
+
+    <view class="ci-card consent-required">
+      <view class="cr-icon">📝</view>
+      <view class="cr-title">需签署知情同意书</view>
+      <view class="cr-desc">体验开始前，请您阅读并签署《知情同意书》，工作人员会为您提供指导。</view>
+      <button class="cr-btn" bindtap="goConsent">阅读并签署</button>
+    </view>
+  </block>
+
+  <block wx:elif="{{!done && !(needConsent && booking)}}">
+    <view class="ci-header">
+      <view class="ci-title">到店签到</view>
+    </view>
+    <view class="ci-empty">
+      <text class="empty-text">加载中...</text>
+    </view>
+  </block>
+
+</view>

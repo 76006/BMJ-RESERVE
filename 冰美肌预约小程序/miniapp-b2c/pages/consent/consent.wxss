@@ -1,0 +1,222 @@
+.page {
+  padding: 24rpx 24rpx max(56rpx, calc(24rpx + env(safe-area-inset-bottom))); min-height: 100vh; background: var(--bg); }
+
+.consent-card {
+  background: #FFFFFF;
+  border-radius: 20rpx;
+  padding: 36rpx 28rpx;
+  border: 1rpx solid var(--gray-200);
+}
+
+/* 标题 */
+.consent-header { text-align: center; margin-bottom: 20rpx; }
+.consent-title {
+  display: block;
+  font-size: 36rpx;
+  font-weight: 700;
+  color: #1F2937;
+  letter-spacing: 4rpx;
+}
+.consent-subtitle {
+  display: block;
+  font-size: 24rpx;
+  color: var(--mid-gray);
+  margin-top: 8rpx;
+}
+
+/* 正文区 */
+.consent-body.flat { max-height: 560rpx; margin-bottom: 20rpx; }
+.section-title {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin: 28rpx 0 14rpx;
+  padding-bottom: 10rpx;
+  border-bottom: 1rpx solid var(--gray-200);
+}
+.section:first-child .section-title { margin-top: 10rpx; }
+
+/* 引言 + 通用段落 */
+.sec-intro { margin-bottom: 20rpx; }
+.p {
+  font-size: 24rpx;
+  color: var(--text-muted);
+  line-height: 1.9;
+  display: block;
+}
+
+/* 平铺章节 */
+.section { margin-bottom: 4rpx; }
+
+/* 风险列表 */
+.risk-list { margin-top: 12rpx; display: flex; flex-direction: column; gap: 8rpx; }
+.risk-item { font-size: 24rpx; color: var(--text-muted); line-height: 1.7; }
+.risk-note { margin-top: 16rpx; font-weight: 500; }
+
+/* 基本信息行 */
+.info-row { display: flex; align-items: center; padding: 6rpx 0; }
+.info-label { font-size: 24rpx; color: var(--text-muted); }
+.info-gap { width: 60rpx; flex-shrink: 0; }
+.info-em { color: var(--text-secondary); font-weight: 500; }
+.info-sep { height: 1rpx; background: var(--gray-100); margin: 10rpx 0; }
+
+/* 禁忌证 */
+.contraindication { padding-left: 0; }
+.contra-group {
+  margin-bottom: 16rpx;
+  padding: 14rpx 16rpx;
+  background: #FFF7ED;
+  border-radius: 8rpx;
+  border-left: 3rpx solid #F59E0B;
+}
+.contra-label {
+  display: block;
+  font-size: 24rpx;
+  font-weight: 700;
+  color: var(--amber-dark);
+  margin-bottom: 8rpx;
+}
+.contra-item { display: block; font-size: 26rpx; color: var(--text-muted); line-height: 1.7; }
+.contra-judge { margin-top: 16rpx; font-weight: 500; }
+
+/* 摄影授权 */
+.photo-auth {
+  margin-top: 20rpx;
+  padding: 18rpx;
+  background: #FAFAFA;
+  border-radius: 10rpx;
+}
+.photo-auth-title {
+  font-size: 24rpx;
+  color: var(--text-secondary);
+  font-weight: 500;
+  display: block;
+  margin-bottom: 14rpx;
+}
+.photo-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10rpx;
+  margin-bottom: 12rpx;
+}
+.photo-check {
+  width: 36rpx;
+  height: 36rpx;
+  border-radius: 6rpx;
+  border: 2rpx solid var(--gray-200);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background: #FFF;
+  font-size: 22rpx;
+  color: #FFF;
+}
+.photo-check.checked {
+  background: var(--brand-blue);
+  border-color: var(--brand-blue);
+}
+.photo-text { font-size: 24rpx; color: var(--text-muted); line-height: 1.6; flex: 1; }
+.photo-note {
+  font-size: 22rpx;
+  color: var(--mid-gray);
+  display: block;
+  margin-top: 6rpx;
+}
+
+/* 签署行 */
+.sign-line {
+  padding: 16rpx 0 20rpx;
+}
+.sign-text { font-size: 24rpx; color: var(--text-muted); }
+
+/* 编号列表 */
+.num-list { display: flex; flex-direction: column; gap: 14rpx; }
+.num-item { display: flex; gap: 6rpx; }
+.num {
+  font-size: 24rpx;
+  font-weight: 600;
+  color: var(--brand-blue);
+  flex-shrink: 0;
+  margin-top: 2rpx;
+}
+.num-text { font-size: 24rpx; color: var(--text-muted); line-height: 1.7; flex: 1; }
+
+/* 声明 */
+.declaration {
+  margin-top: 20rpx;
+  padding: 20rpx;
+  background: #F3F4F6;
+  border-radius: 10rpx;
+  border: 1rpx solid #E5E7EB;
+}
+.declaration .p { color: #374151; line-height: 1.8; }
+
+/* 全部阅读确认 */
+.all-read {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  margin-bottom: 24rpx;
+  padding: 16rpx 0;
+}
+.checkbox {
+  width: 40rpx;
+  height: 40rpx;
+  border: 2rpx solid var(--gray-300);
+  border-radius: 8rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.checkbox.checked {
+  background: var(--brand-blue);
+  border-color: var(--brand-blue);
+}
+.checkbox.checked text { color: #fff; font-size: 24rpx; font-weight: 700; }
+.all-read-text { font-size: 26rpx; color: var(--text-secondary); }
+.scroll-hint {
+  text-align: center;
+  margin-top: 8rpx;
+}
+.scroll-hint-text {
+  font-size: 24rpx;
+  color: var(--mid-gray);
+  animation: pulse 1.5s ease-in-out infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
+}
+
+/* 按钮 */
+.actions { display: flex; }
+.btn-confirm {
+  flex: 1;
+  height: 88rpx;
+  line-height: 88rpx;
+  text-align: center;
+  background: var(--brand-blue);
+  color: #fff;
+  border-radius: 12rpx;
+  font-size: 28rpx;
+  font-weight: 500;
+}
+.btn-confirm.disabled {
+  background: var(--gray-300);
+  color: var(--mid-gray);
+}
+
+/* 护理须知入口 */
+.aftercare-link {
+  text-align: center;
+  padding: 20rpx 0 0;
+  border-top: 1rpx solid var(--gray-100);
+  margin-top: 20rpx;
+}
+.link-text {
+  font-size: 26rpx;
+  color: var(--brand-blue);
+  font-weight: 500;
+}

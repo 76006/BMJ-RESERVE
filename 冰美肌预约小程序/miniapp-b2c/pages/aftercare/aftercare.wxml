@@ -1,0 +1,119 @@
+<view class="page">
+  <!-- 顶部导航栏 -->
+  <nav-bar title="护理须知" showBack="{{true}}"></nav-bar>
+
+  <!-- Tab 切换 -->
+  <view class="tab-bar">
+    <view class="tab {{activeTab === 0 ? 'active' : ''}}" catchtap="switchTab" data-index="0">24小时内</view>
+    <view class="tab {{activeTab === 1 ? 'active' : ''}}" catchtap="switchTab" data-index="1">30天</view>
+    <view class="tab {{activeTab === 2 ? 'active' : ''}}" catchtap="switchTab" data-index="2">90天</view>
+  </view>
+
+  <!-- ========== 24小时内 ========== -->
+  <view class="tab-content" wx:if="{{activeTab === 0}}">
+    <!-- 正常反应 -->
+    <view class="reaction-card">
+      <view class="reaction-title">💡 正常反应</view>
+      <view class="reaction-text">体验后可能出现轻微泛红、肿胀、刺痛、紧绷感，通常1-3天自行消退，无需担心。</view>
+    </view>
+
+    <view class="section-card">
+      <view class="section-title">🚿 清洁禁忌</view>
+      <view class="item-list">
+        <view class="item">体验后24小时内操作区域禁止碰水、洗脸、化妆，避免护肤品、彩妆刺激脆弱肌肤，防止引发泛红、敏感、炎症问题。</view>
+      </view>
+    </view>
+
+    <view class="section-card">
+      <view class="section-title">🌡️ 温控禁忌</view>
+      <view class="item-list">
+        <view class="item">严禁热敷、蒸桑拿、泡温泉、剧烈运动出汗，同时避免长时间暴晒、处于高温环境，防止射频受热后影响胶原修复，加重肌肤灼热泛红。</view>
+      </view>
+    </view>
+
+    <view class="section-card">
+      <view class="section-title">🧴 护肤禁忌</view>
+      <view class="item-list">
+        <view class="item">禁止使用含酸类、酒精、维A醇、美白功效型护肤品，仅可后续使用医用温和修护产品，减少肌肤负担。</view>
+      </view>
+    </view>
+
+    <view class="section-card">
+      <view class="section-title">🍽️ 饮食禁忌</view>
+      <view class="item-list">
+        <view class="item">忌辛辣刺激、海鲜、烟酒，保证充足休息，避免熬夜，助力肌肤快速修复。</view>
+      </view>
+    </view>
+
+    <view class="section-card">
+      <view class="section-title">📋 状态须知</view>
+      <view class="item-list">
+        <view class="item">体验后轻微泛红、温热感、紧绷感均为正常现象，会随肌肤修复逐步消退，无需过度担心。</view>
+      </view>
+    </view>
+  </view>
+
+  <!-- ========== 30天 ========== -->
+  <view class="tab-content" wx:if="{{activeTab === 1}}">
+    <view class="section-card">
+      <view class="section-title">💧 核心护肤</view>
+      <view class="item-list">
+        <view class="item">重点做好补水+防晒！每日坚持使用医用保湿修护水乳、面膜，补足肌肤水分，助力胶原持续再生；外出严格涂抹防晒霜、佩戴帽子口罩，杜绝紫外线导致的色素沉着、肌肤老化。</view>
+      </view>
+    </view>
+
+    <view class="section-card">
+      <view class="section-title">✨ 护肤升级</view>
+      <view class="item-list">
+        <view class="item">按规划进行焕肤：以定期焕肤技术为基础，每1-2周在操作师指导下进行焕肤，维持焕肤效果，让肌肤持续细腻。</view>
+        <view class="item">焕肤后搭配修护精华：使用修复功能的精华液（如生长因子精华），加速修复后肌肤恢复，巩固焕肤成果。</view>
+      </view>
+    </view>
+
+    <view class="section-card">
+      <view class="section-title">🏃 生活养护</view>
+      <view class="item-list">
+        <view class="item">加强日常自我监测：每日关注肌肤状态，记录肌肤恢复情况（如光泽度、细腻度），为后续效果评估提供依据。</view>
+      </view>
+    </view>
+
+    <view class="section-card">
+      <view class="section-title">📋 状态跟进</view>
+      <view class="item-list">
+        <view class="item">如有问题，随时联系：若30天体验期间发现肌肤有异常（如过敏、修复不佳），可随时与操作师沟通，调整方案。</view>
+      </view>
+    </view>
+  </view>
+
+  <!-- ========== 90天 ========== -->
+  <view class="tab-content" wx:if="{{activeTab === 2}}">
+    <view class="section-card">
+      <view class="section-title">🛡️ 维稳护肤</view>
+      <view class="item-list">
+        <view class="item">建立日常护肤routine：每日护肤，补水+防晒+修护精华，缺一不可。避免使用高功效型护肤品（如强酸），以免刺激修复后的脆弱肌肤。</view>
+        <view class="item">定期焕肤维持：每3-6个月做一次焕肤，或按操作师建议维持，长期保持肌肤紧致、细腻。</view>
+      </view>
+    </view>
+
+    <view class="section-card">
+      <view class="section-title">☀️ 硬核防晒</view>
+      <view class="item-list">
+        <view class="item">物理防晒（帽子、口罩、伞）+化学防晒（高倍防晒霜）双管齐下，修复后的肌肤对紫外线更敏感，防晒是防止色斑、老化的核心！</view>
+      </view>
+    </view>
+
+    <view class="section-card">
+      <view class="section-title">✨ 定期养护</view>
+      <view class="item-list">
+        <view class="item">随年龄、肤质变化调整方案：定期与操作师沟通，根据肌肤状态调整焕肤或修复方案，维持最佳效果。</view>
+      </view>
+    </view>
+
+    <view class="section-card">
+      <view class="section-title">🌙 作息管理</view>
+      <view class="item-list">
+        <view class="item">保持规律作息，不熬夜，助肌肤自我修复。坚持健康饮食，减少高糖、油炸食品，从内而外改善肤质。</view>
+      </view>
+    </view>
+  </view>
+</view>

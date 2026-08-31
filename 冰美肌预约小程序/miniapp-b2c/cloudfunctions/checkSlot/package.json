@@ -1,0 +1,9 @@
+{
+  "name": "checkSlot",
+  "version": "1.0.0",
+  "description": "服务端权威判断某时段是否被占用（防并发双占）",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3"
+  }
+}

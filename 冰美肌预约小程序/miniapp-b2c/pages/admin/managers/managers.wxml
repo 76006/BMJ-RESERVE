@@ -1,0 +1,114 @@
+<!-- 人员管理 -->
+<nav-bar title="人员管理" showBack="{{true}}"></nav-bar>
+
+<view class="page">
+  <!-- 加载中 -->
+  <view wx:if="{{loading}}" class="loading-wrap">
+    <text class="loading-text">加载中...</text>
+  </view>
+
+  <block wx:else>
+    <!-- 管理员列表 -->
+    <view class="section">
+      <view class="section-header">
+        <text class="section-title">管理员</text>
+        <text class="section-count">({{admins.length}})</text>
+      </view>
+      <view class="staff-list">
+        <view class="staff-item" wx:for="{{admins}}" wx:key="phone">
+          <view class="staff-avatar {{item.role === 'superadmin' ? 'super' : ''}}">
+            <text>{{item.name ? item.name[0] : '管'}}</text>
+          </view>
+          <view class="staff-info">
+            <view class="staff-name">{{item.name}} <text class="staff-phone">{{item.phone}}</text></view>
+            <view class="staff-meta">
+              <view class="role-tag {{item.role}}">{{item.role === 'superadmin' ? '超级管理员' : '管理员'}}</view>
+            </view>
+          </view>
+          <view class="staff-action">
+            <view wx:if="{{item.role === 'superadmin'}}" class="tag-self">本人</view>
+            <view wx:else class="btn-remove" data-phone="{{item.phone}}" data-name="{{item.name}}" bindtap="removePerson">移除</view>
+          </view>
+        </view>
+        <view wx:if="{{admins.length === 0}}" class="empty-tip">暂无管理员</view>
+      </view>
+    </view>
+
+    <!-- 操作师列表 -->
+    <view class="section">
+      <view class="section-header">
+        <text class="section-title">操作师</text>
+        <text class="section-count">({{operators.length}})</text>
+      </view>
+      <view class="staff-list">
+        <view class="staff-item" wx:for="{{operators}}" wx:key="phone">
+          <view class="staff-avatar">
+            <text>{{item.name ? item.name[0] : '操'}}</text>
+          </view>
+          <view class="staff-info">
+            <view class="staff-name">{{item.name}} <text class="staff-phone">{{item.phone}}</text></view>
+            <view class="staff-meta">
+              <view class="role-tag staff">操作师</view>
+            </view>
+          </view>
+          <view class="staff-action">
+            <view class="btn-remove" data-phone="{{item.phone}}" data-name="{{item.name}}" bindtap="removePerson">移除</view>
+          </view>
+        </view>
+        <view wx:if="{{operators.length === 0}}" class="empty-tip">暂无操作师</view>
+      </view>
+    </view>
+
+    <!-- 访客列表（折叠） -->
+    <view class="section">
+      <view class="section-header fold" bindtap="toggleVisitors">
+        <text class="section-title">访客列表</text>
+        <text class="section-count">({{visitors.length}})</text>
+        <text class="fold-arrow {{showVisitors ? 'open' : ''}}">▾</text>
+      </view>
+      <view class="visitor-list" wx:if="{{showVisitors}}">
+        <view class="visitor-tip">打开过小程序的用户，可直接点击添加为操作师</view>
+        <view class="staff-list">
+          <view class="staff-item" wx:for="{{visitors}}" wx:key="_id">
+            <view class="staff-avatar light">
+              <text>访</text>
+            </view>
+            <view class="staff-info">
+              <view class="staff-name">{{item.shortId}}</view>
+              <view class="staff-meta">
+                <text class="visitor-meta">{{item.lastVisitShort}} · {{item.visitCount || 1}}次</text>
+              </view>
+            </view>
+            <view class="staff-action">
+              <view wx:if="{{item.isAlreadyAdmin}}" class="tag-added">已添加</view>
+              <view wx:else class="btn-add" data-openid="{{item.openId}}" bindtap="addFromVisitor">+ 添加</view>
+            </view>
+          </view>
+          <view wx:if="{{visitors.length === 0}}" class="empty-tip">暂无访客记录</view>
+        </view>
+      </view>
+    </view>
+  </block>
+
+  <!-- 底部添加按钮 -->
+  <view class="bottom-btn" bindtap="showAddModal">
+    <text>+ 添加人员</text>
+  </view>
+
+  <!-- 添加弹窗 -->
+  <view class="modal" wx:if="{{showModal}}" catchtouchmove="stop">
+    <view class="modal-mask" bindtap="hideAddModal" catchtouchmove="stop"></view>
+    <view class="modal-content" catchtouchmove="stop">
+      <view class="modal-title">添加人员</view>
+      <input class="modal-input" placeholder="请输入手机号" type="number" maxlength="11" bindinput="onPhoneInput" value="{{inputPhone}}" />
+      <view class="role-selector">
+        <view class="role-option {{selectedRole === 'staff' ? 'active' : ''}}" bindtap="selectRole" data-role="staff">操作师</view>
+        <view class="role-option {{selectedRole === 'admin' ? 'active' : ''}}" bindtap="selectRole" data-role="admin">管理员</view>
+      </view>
+      <view class="modal-actions">
+        <view class="btn-cancel" bindtap="hideAddModal">取消</view>
+        <view class="btn-confirm" bindtap="confirmAdd">确认添加</view>
+      </view>
+    </view>
+  </view>
+</view>

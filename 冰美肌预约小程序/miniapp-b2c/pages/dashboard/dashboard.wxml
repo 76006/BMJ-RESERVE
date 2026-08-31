@@ -1,0 +1,100 @@
+<nav-bar title="数据看板" showBack="{{true}}"></nav-bar>
+<!-- 数据看板 -->
+<view class="page">
+  <!-- 时间筛选器 -->
+  <view class="time-filter">
+    <view class="filter-item {{timeRange === '30d' ? 'active' : ''}}" data-range="30d" bindtap="onTimeFilter">近30天</view>
+    <view class="filter-item {{timeRange === '90d' ? 'active' : ''}}" data-range="90d" bindtap="onTimeFilter">近90天</view>
+    <view class="filter-item {{timeRange === '180d' ? 'active' : ''}}" data-range="180d" bindtap="onTimeFilter">近180天</view>
+    <view class="filter-item {{timeRange === 'all' ? 'active' : ''}}" data-range="all" bindtap="onTimeFilter">全部</view>
+  </view>
+
+  <!-- 概览指标 -->
+  <view class="overview">
+    <view class="metric-card">
+      <view class="metric-num">{{stats.total}}</view>
+      <view class="metric-label">总预约数</view>
+    </view>
+    <view class="metric-card">
+      <view class="metric-num c-green">{{stats.visited}}</view>
+      <view class="metric-label">已到店</view>
+    </view>
+    <view class="metric-card">
+      <view class="metric-num c-brand">{{stats.conversion}}%</view>
+      <view class="metric-label">到店率</view>
+    </view>
+    <view class="metric-card">
+      <view class="metric-num c-amber">{{stats.avgSatisfaction}}</view>
+      <view class="metric-label">均满意度</view>
+    </view>
+  </view>
+
+  <!-- 今日概览 -->
+  <view class="section" wx:if="{{todaySummary.total > 0}}">
+    <view class="section-title">📅 今日概览</view>
+    <view class="today-row">
+      <view class="today-item">
+        <view class="today-num">{{todaySummary.total}}</view>
+        <view class="today-label">今日预约</view>
+      </view>
+      <view class="today-item">
+        <view class="today-num c-green">{{todaySummary.confirmed}}</view>
+        <view class="today-label">已预约</view>
+      </view>
+      <view class="today-item">
+        <view class="today-num c-amber">{{todaySummary.visiting}}</view>
+        <view class="today-label">新预约</view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 状态分布 -->
+  <view class="section">
+    <view class="section-title">预约状态分布</view>
+    <view class="status-bar">
+      <view class="bar-item" wx:for="{{statusList}}" wx:key="key">
+        <view class="bar-label">{{item.label}}</view>
+        <view class="bar-track">
+          <view class="bar-fill" style="width: {{item.pct}}%; background: {{item.color}}"></view>
+        </view>
+        <view class="bar-num">{{item.count}}</view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 满意度分布 -->
+  <view class="section">
+    <view class="section-title">满意度分布（基于回访）</view>
+    <view class="sat-dist">
+      <view class="sat-col" wx:for="{{[5,4,3,2,1]}}" wx:key="*this">
+        <view class="sat-bar">
+          <view class="sat-fill" style="height: {{stats.satDist[item] || 0}}px"></view>
+        </view>
+        <view class="sat-star">{{item}}★</view>
+        <view class="sat-cnt">{{stats.satDist[item + 'cnt'] || 0}}</view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 近30天趋势 -->
+  <view class="section">
+    <view class="section-title">近30天预约趋势</view>
+    <view class="chart-area">
+      <view class="chart-bar" wx:for="{{trend}}" wx:key="*this" style="height: {{item.h}}px">
+        <view class="chart-val" wx:if="{{item.count > 0}}">{{item.count}}</view>
+      </view>
+    </view>
+    <view class="chart-labels">
+      <text wx:for="{{trend}}" wx:key="*this" class="chart-label">{{item.label}}</text>
+    </view>
+  </view>
+
+  <view class="bottom-safe"></view>
+
+  <!-- 测试面板入口 -->
+  <view class="test-entry" bindtap="goTestPanel">
+    <text class="test-entry-icon">🧪</text>
+    <text class="test-entry-text">模拟测试面板</text>
+    <text class="test-entry-arrow">›</text>
+  </view>
+</view>

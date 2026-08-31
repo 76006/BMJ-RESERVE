@@ -1,0 +1,70 @@
+<!-- 数据预览表格 -->
+<nav-bar title="数据预览" showBack="{{true}}"></nav-bar>
+
+<view class="page">
+
+  <!-- 工具栏 -->
+  <view class="toolbar">
+    <view class="toolbar-info">共 {{total}} 条记录</view>
+    <view class="toolbar-actions">
+      <view class="toolbar-btn" bindtap="copyAll">
+        <text class="btn-icon">📋</text>
+        <text>复制全部</text>
+      </view>
+      <view class="toolbar-btn" bindtap="shareScreenshot">
+        <text class="btn-icon">📸</text>
+        <text>截图分享</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 横向滚动表格 -->
+  <scroll-view scroll-x class="table-wrap" enhanced show-scrollbar>
+    <view class="table">
+      <!-- 表头 -->
+      <view class="thead">
+        <view class="th" style="width:120rpx">序号</view>
+        <view class="th" style="width:160rpx">姓名</view>
+        <view class="th" style="width:100rpx">性别</view>
+        <view class="th" style="width:100rpx">年龄</view>
+        <view class="th" style="width:220rpx">电话</view>
+        <view class="th" style="width:220rpx">预约日期</view>
+        <view class="th" style="width:160rpx">预约时间</view>
+        <view class="th" style="width:220rpx">改善需求</view>
+        <view class="th" style="width:160rpx">状态</view>
+        <view class="th" style="width:160rpx">来源</view>
+        <view class="th" style="width:200rpx">负责人</view>
+        <view class="th" style="width:300rpx">内部备注</view>
+        <view class="th" style="width:220rpx">提交时间</view>
+      </view>
+
+      <!-- 表体 -->
+      <view class="tbody">
+        <view class="tr" wx:for="{{rows}}" wx:key="id">
+          <view class="td" style="width:120rpx">{{index + 1}}</view>
+          <view class="td" style="width:160rpx">{{item.name}}</view>
+          <view class="td" style="width:100rpx">{{item.gender}}</view>
+          <view class="td" style="width:100rpx">{{item.age}}</view>
+          <view class="td" style="width:220rpx">{{item.phone}}</view>
+          <view class="td" style="width:220rpx">{{item.visitDate}}</view>
+          <view class="td" style="width:160rpx">{{item.visitTime}}</view>
+          <view class="td" style="width:220rpx">{{item.needs}}</view>
+          <view class="td" style="width:160rpx">
+            <view class="status-tag status-{{item._status}}">{{item.statusLabel}}</view>
+          </view>
+          <view class="td" style="width:160rpx">{{item.channelLabel}}</view>
+          <view class="td" style="width:200rpx">{{item._clientManager || '-'}}</view>
+          <view class="td" style="width:300rpx">{{item._adminNote || '-'}}</view>
+          <view class="td" style="width:220rpx">{{item.createdAtStr}}</view>
+        </view>
+      </view>
+    </view>
+  </scroll-view>
+
+  <!-- 空状态 -->
+  <view class="empty" wx:if="{{rows.length === 0}}">
+    <text class="empty-icon">📭</text>
+    <text class="empty-text">暂无数据</text>
+  </view>
+
+</view>

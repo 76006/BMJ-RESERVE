@@ -1,0 +1,176 @@
+// 操作师二维码 + 门店签到码配置页
+Page({
+  data: {
+    trainers: [],
+    newTrainerId: '',
+    newTrainerName: '',
+    newChannel: 'beauty',
+    channelOptions: ['beauty', 'medical'],
+    channelLabels: ['生美渠道', '医疗渠道'],
+    channelIdx: 0,
+    showAddForm: false,
+    // 门店签到码
+    checkinCodeReady: false,
+    checkinCodeUrl: '',
+    checkinCodeFileID: ''
+  },
+
+  onLoad() {
+    const role = (getApp().globalData.adminRole || wx.getStorageSync('_adminRole') || '')
+    if (!['staff', 'superadmin'].includes(role)) {
+      wx.showModal({ title: '无权限', content: '仅工作人员可访问。', showCancel: false, success: () => wx.navigateBack() })
+      return
+    }
+    this.loadTrainers()
+    this._loadCachedCheckinCode()
+  },
+
+  loadTrainers() {
+    const list = wx.getStorageSync('trainers') || []
+    this.setData({ trainers: list })
+  },
+
+  // ===== 操作师管理 =====
+
+  toggleAddForm() {
+    this.setData({ showAddForm: !this.data.showAddForm })
+  },
+
+  onTrainerId(e) { this.setData({ newTrainerId: e.detail.value }) },
+  onTrainerName(e) { this.setData({ newTrainerName: e.detail.value }) },
+  onChannel(e) {
+    const idx = Number(e.detail.value)
+    this.setData({ channelIdx: idx, newChannel: this.data.channelOptions[idx] })
+  },
+
+  addTrainer() {
+    const { newTrainerId, newTrainerName, newChannel } = this.data
+    if (!newTrainerId.trim() || !newTrainerName.trim()) {
+      wx.showToast({ title: '请填写ID和姓名', icon: 'none' })
+      return
+    }
+    const list = wx.getStorageSync('trainers') || []
+    list.push({
+      id: newTrainerId.trim(),
+      name: newTrainerName.trim(),
+      channel: newChannel,
+      sceneParam: `channel=${newChannel}&trainer=${encodeURIComponent(newTrainerId.trim())}&name=${encodeURIComponent(newTrainerName.trim())}`
+    })
+    wx.setStorageSync('trainers', list)
+    this.setData({
+      trainers: list,
+      newTrainerId: '',
+      newTrainerName: '',
+      showAddForm: false
+    })
+    wx.showToast({ title: '已添加', icon: 'success' })
+  },
+
+  deleteTrainer(e) {
+    const id = e.currentTarget.dataset.id
+    wx.showModal({
+      title: '确认删除',
+      content: '删除该操作师配置？',
+      success: (res) => {
+        if (res.confirm) {
+          const list = (wx.getStorageSync('trainers') || []).filter(t => t.id !== id)
+          wx.setStorageSync('trainers', list)
+          this.setData({ trainers: list })
+        }
+      }
+    })
+  },
+
+  copyScene(e) {
+    const scene = e.currentTarget.dataset.scene
+    const tip = `page=pages/index/index\nscene=${scene}\n\n将以上参数提交微信平台或使用云开发生成小程序码`
+    wx.setClipboardData({
+      data: tip,
+      success: () => {
+        wx.showToast({ title: '参数已复制', icon: 'success' })
+      }
+    })
+  },
+
+  goBack() {
+    wx.navigateBack()
+  },
+
+  // ===== 门店签到码 =====
+  genCheckinCode() {
+    if (this.data.checkinCodeReady) {
+      const previewUrl = this.data.checkinCodeFileID || this.data.checkinCodeUrl
+      if (previewUrl) {
+        wx.previewImage({ urls: [previewUrl] })
+      }
+      return
+    }
+
+    wx.showLoading({ title: '生成中...', mask: true })
+    wx.cloud.callFunction({
+      name: 'genCheckinCode',
+      // 云函数内要调微信接口，给足时间
+      timeout: 20000,
+      success: res => {
+        wx.hideLoading()
+        const r = res.result
+        if (r && r.success && r.codeUrl) {
+          this.setData({
+            checkinCodeReady: true,
+            checkinCodeUrl: r.codeUrl,
+            checkinCodeFileID: r.fileID || ''
+          })
+          wx.setStorageSync('_checkinCodeUrl', r.codeUrl)
+          wx.setStorageSync('_checkinCodeFileID', r.fileID || '')
+          wx.showModal({
+            title: '签到码已生成',
+            content: '长按二维码图片可保存到相册，打印后贴在门店前台即可。顾客扫码后自动进入签到流程。',
+            showCancel: false,
+            confirmText: '查看二维码',
+            success: () => {
+              const previewUrl = this.data.checkinCodeFileID || this.data.checkinCodeUrl
+              wx.previewImage({ urls: [previewUrl] })
+            }
+          })
+        } else {
+          // 云函数返回了明确错误，显示完整信息
+          const errorMsg = (r && r.error) || '请稍后重试'
+          wx.showModal({ title: '生成失败', content: errorMsg, showCancel: false })
+          console.error('[genCheckinCode] 云函数返回:', r)
+        }
+      },
+      fail: err => {
+        wx.hideLoading()
+        // 客户端调用失败：超时 / 未部署 / 网络问题
+        const msg = err.errMsg || JSON.stringify(err)
+        wx.showModal({ title: '生成失败', content: msg, showCancel: false })
+        console.error('[genCheckinCode] 调用失败:', err)
+      }
+    })
+  },
+
+  _loadCachedCheckinCode() {
+    const fileID = wx.getStorageSync('_checkinCodeFileID')
+    const url = wx.getStorageSync('_checkinCodeUrl')
+    if (fileID) {
+      this.setData({ checkinCodeReady: true, checkinCodeFileID: fileID, checkinCodeUrl: url || '' })
+    } else if (url) {
+      // 旧缓存只有临时 URL（会过期），直接清理，让用户重新生成
+      wx.removeStorageSync('_checkinCodeUrl')
+    }
+  },
+
+  // 图片加载失败：临时 URL 过期或 fileID 失效
+  onCodeImageError(e) {
+    console.error('[qrconfig] 签到码图片加载失败:', e.detail)
+    wx.removeStorageSync('_checkinCodeUrl')
+    wx.removeStorageSync('_checkinCodeFileID')
+    this.setData({ checkinCodeReady: false, checkinCodeUrl: '', checkinCodeFileID: '' })
+    wx.showToast({ title: '二维码已过期，请重新生成', icon: 'none' })
+  },
+
+  // 模拟扫码签到（小程序发布前测试用）
+  simulateCheckin() {
+    wx.navigateTo({ url: '/pages/checkin/guest/guest' })
+  }
+})

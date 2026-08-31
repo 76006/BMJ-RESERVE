@@ -1,0 +1,9 @@
+{
+  "name": "sendBookingNotify",
+  "version": "1.0.0",
+  "description": "预约确认后推送订阅消息",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3"
+  }
+}

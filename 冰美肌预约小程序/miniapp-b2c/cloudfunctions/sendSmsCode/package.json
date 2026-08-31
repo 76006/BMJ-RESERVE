@@ -1,0 +1,5 @@
+{
+  "name": "sendSmsCode",
+  "version": "1.0.0",
+  "description": "发送短信验证码云函数"
+}

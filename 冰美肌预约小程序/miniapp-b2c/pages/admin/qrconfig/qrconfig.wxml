@@ -1,0 +1,106 @@
+<nav-bar title="二维码配置" showBack="{{true}}"></nav-bar>
+<!-- 操作师二维码 + 门店签到码配置 -->
+<view class="page">
+
+  <view class="qr-header">
+    <view class="qr-back" bindtap="goBack">‹ 返回</view>
+    <view class="qr-title">二维码配置</view>
+    <view class="qr-sub">管理操作师专属码和门店签到码</view>
+  </view>
+
+  <!-- ===== 操作师二维码 ===== -->
+  <view class="info-card">
+    <view class="info-card-title">📌 操作师二维码</view>
+    <view class="info-card-body">
+      <text class="p">1. 添加操作师信息，系统生成专属参数</text>
+      <text class="p">2. 复制参数 → 在微信公众平台生成带参数的小程序码</text>
+      <text class="p">3. 用户扫码进入小程序后，预约记录自动关联该操作师</text>
+    </view>
+  </view>
+
+  <!-- 操作师列表 -->
+  <view class="trainer-list">
+    <view class="trainer-card" wx:for="{{trainers}}" wx:key="id">
+      <view class="trainer-top">
+        <view class="trainer-name">{{item.name}}</view>
+        <view class="trainer-channel {{item.channel}}">{{item.channel === 'medical' ? '医疗渠道' : '生美渠道'}}</view>
+      </view>
+      <view class="trainer-id">ID: {{item.id}}</view>
+      <view class="trainer-scene">参数: {{item.sceneParam}}</view>
+      <view class="trainer-actions">
+        <button class="copy-btn" size="mini" data-scene="{{item.sceneParam}}" bindtap="copyScene">复制参数</button>
+        <button class="del-btn" size="mini" data-id="{{item.id}}" bindtap="deleteTrainer">删除</button>
+      </view>
+    </view>
+
+    <view class="empty-trainer" wx:if="{{trainers.length === 0}}">
+      <text>暂无操作师配置，点击下方添加</text>
+    </view>
+  </view>
+
+  <!-- 添加按钮 -->
+  <view class="add-btn-wrap">
+    <button class="add-trainer-btn" bindtap="toggleAddForm">
+      {{showAddForm ? '收起' : '+ 添加操作师'}}
+    </button>
+  </view>
+
+  <!-- 添加表单 -->
+  <view class="add-form" wx:if="{{showAddForm}}">
+    <view class="form-field">
+      <view class="form-label">操作师ID（唯一标识，字母数字）</view>
+      <input class="form-input" placeholder="如: T001" value="{{newTrainerId}}" bindinput="onTrainerId" placeholder-class="ph"/>
+    </view>
+    <view class="form-field">
+      <view class="form-label">操作师姓名</view>
+      <input class="form-input" placeholder="如: 张操作师" value="{{newTrainerName}}" bindinput="onTrainerName" placeholder-class="ph"/>
+    </view>
+    <view class="form-field">
+      <view class="form-label">所属渠道</view>
+      <picker mode="selector" range="{{['生美渠道','医疗渠道']}}" bindchange="onChannel">
+        <view class="form-picker">{{channelIdx === 0 ? '生美渠道' : '医疗渠道'}}</view>
+      </picker>
+    </view>
+    <button class="submit-btn" bindtap="addTrainer">确认添加</button>
+  </view>
+
+  <!-- ===== 分隔线 ===== -->
+  <view class="divider"></view>
+
+  <!-- ===== 门店签到码 ===== -->
+  <view class="info-card" style="margin-top: 0;">
+    <view class="info-card-title">📍 门店签到码</view>
+    <view class="info-card-body">
+      <text class="p">1. 顾客到店扫此码 → 自动识别预约 → 签知情同意书 → 完成签到</text>
+      <text class="p">2. 点击下方按钮生成，可保存打印贴门店前台</text>
+    </view>
+  </view>
+
+  <view class="qrcode-card">
+    <view class="qrcode-info">
+      <view class="qrcode-status {{checkinCodeReady ? 'ready' : 'pending'}}">
+        {{checkinCodeReady ? '已生成' : '点击下方按钮生成'}}
+      </view>
+    </view>
+    <view class="qrcode-img-area" wx:if="{{checkinCodeUrl || checkinCodeFileID}}">
+      <image class="qrcode-img" src="{{checkinCodeFileID || checkinCodeUrl}}" mode="widthFix" show-menu-by-longpress binderror="onCodeImageError" />
+      <text class="qrcode-tip">长按图片保存，打印贴门店前台</text>
+    </view>
+    <button class="qrcode-btn" bindtap="genCheckinCode" disabled="{{checkinCodeReady}}">
+      {{checkinCodeReady ? '签到码已生成' : '生成门店签到码'}}
+    </button>
+  </view>
+
+  <!-- ===== 测试入口：模拟扫码签到（备案期间无法外部扫码） ===== -->
+  <view class="divider"></view>
+  <view class="info-card" style="margin-top: 0;">
+    <view class="info-card-title">🧪 模拟扫码签到</view>
+    <view class="info-card-body">
+      <text class="p">备案期间小程序码扫描会提示「尚未发布」。点击下方按钮可模拟顾客扫码签到的完整流程。</text>
+    </view>
+  </view>
+  <view class="qrcode-card">
+    <button class="sim-checkin-btn" bindtap="simulateCheckin">进入签到流程（模拟扫码）</button>
+  </view>
+
+</view>

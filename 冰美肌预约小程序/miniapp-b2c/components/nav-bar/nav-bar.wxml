@@ -1,0 +1,7 @@
+<view class="nav-bar" style="padding-top:{{statusBarHeight}}px;background:{{bgColor}}">
+  <view class="nav-left" wx:if="{{showBack}}" bindtap="onBack">
+    <view class="nav-back-arrow"></view>
+  </view>
+  <view class="nav-title">{{title}}</view>
+  <view class="nav-right"></view>
+</view>

@@ -1,0 +1,116 @@
+<nav-bar title="法律条款" showBack="{{true}}"></nav-bar>
+<view class="page">
+  <!-- Tab切换 -->
+  <view class="tab-bar">
+    <view class="tab {{activeTab === 'privacy' ? 'active' : ''}}" data-tab="privacy" bindtap="switchTab">隐私政策</view>
+    <view class="tab {{activeTab === 'agreement' ? 'active' : ''}}" data-tab="agreement" bindtap="switchTab">用户协议</view>
+  </view>
+
+  <!-- 隐私政策 -->
+  <scroll-view class="content" scroll-y wx:if="{{activeTab === 'privacy'}}">
+    <view class="section">
+      <text class="h1">隐私政策</text>
+      <text class="update-date">更新日期：2026年6月25日</text>
+      <text class="p">冰美肌（以下简称"我们"）深知个人信息对您的重要性，我们将按照法律法规的规定，保护您的个人信息及隐私安全。本隐私政策将说明我们在提供美容护理体验预约服务过程中如何收集、使用、存储和保护您的个人信息。</text>
+    </view>
+
+    <view class="section">
+      <text class="h2">一、我们收集的信息</text>
+      <text class="p">在您使用预约体验服务时，我们可能收集以下信息：</text>
+      <view class="list">
+        <text class="li">1. 身份信息：姓名、性别、年龄、身份证号码（用于知情同意书实名认证）</text>
+        <text class="li">2. 联系方式：手机号码（用于预约确认、签到通知）</text>
+        <text class="li">3. 健康信息：过往美容护理经历、禁忌证声明（用于安全评估）</text>
+        <text class="li">4. 预约信息：预约日期、时间段、改善需求</text>
+        <text class="li">5. 体验记录：体验设备型号、能量参数、服务评价</text>
+        <text class="li">6. 设备信息：微信OpenID、设备型号、操作系统版本（用于服务优化）</text>
+      </view>
+    </view>
+
+    <view class="section">
+      <text class="h2">二、信息使用目的</text>
+      <view class="list">
+        <text class="li">1. 为您提供美容仪器体验的预约与签到服务</text>
+        <text class="li">2. 生成知情同意书所需的基本信息</text>
+        <text class="li">3. 向您发送预约确认、到店提醒等通知消息</text>
+        <text class="li">4. 进行体验后的回访跟踪与满意度调查</text>
+        <text class="li">5. 改善和优化我们的服务质量</text>
+      </view>
+    </view>
+
+    <view class="section">
+      <text class="h2">三、信息安全与存储</text>
+      <text class="p">1. 您的个人信息将加密存储于微信云开发平台，仅授权工作人员可访问。</text>
+      <text class="p">2. 我们采取数据加密、访问控制、安全审计等措施保护您的信息。</text>
+      <text class="p">3. 您的信息存储期限为服务关系存续期间及法律法规要求的必要期限。</text>
+      <text class="p">4. 我们不会将您的个人信息出售或非法提供给任何第三方。</text>
+    </view>
+
+    <view class="section">
+      <text class="h2">四、您的权利</text>
+      <view class="list">
+        <text class="li">1. 查阅权：您可以在"我的"页面查看您的预约记录和个人信息。</text>
+        <text class="li">2. 更正权：如发现信息有误，可联系工作人员更正。</text>
+        <text class="li">3. 删除权：如您希望删除个人信息，请联系客服（15821182307 / 微信 bingmeiji2024），我们将在收到请求后15个工作日内核实并删除您的相关数据。</text>
+        <text class="li">4. 撤回同意：您可随时撤回对个人信息收集使用的同意，但不影响撤回前已进行的处理。</text>
+        <text class="li">5. 投诉权：如您认为我们处理您的个人信息侵犯了您的合法权益，可向有关主管部门投诉。</text>
+      </view>
+    </view>
+
+    <view class="section">
+      <text class="h2">五、数据保留与删除</text>
+      <text class="p">1. 您的个人信息将在服务关系存续期间保留，包括预约记录、体验记录、知情同意书及回访问卷等。</text>
+      <text class="p">2. 服务关系终止后，我们将在法律法规要求的期限内保留必要信息（如知情同意书需保留至少5年），超过保留期限后将自动删除或匿名化处理。</text>
+      <text class="p">3. 您可随时通过客服渠道申请删除个人信息，我们将在15个工作日内核实身份后处理您的请求。</text>
+    </view>
+
+    <view class="section">
+      <text class="h2">六、联系我们</text>
+      <text class="p">如您对本隐私政策有任何疑问或建议，请通过以下方式联系我们：</text>
+      <text class="p">客服电话：15821182307（周小姐）</text>
+      <text class="p">微信号：bingmeiji2024</text>
+    </view>
+  </scroll-view>
+
+  <!-- 用户协议 -->
+  <scroll-view class="content" scroll-y wx:if="{{activeTab === 'agreement'}}">
+    <view class="section">
+      <text class="h1">用户协议</text>
+      <text class="update-date">更新日期：2026年6月25日</text>
+      <text class="p">欢迎使用冰美肌预约体验小程序。在您使用本小程序服务前，请仔细阅读以下条款。使用本小程序即表示您同意并接受本协议的全部内容。</text>
+    </view>
+
+    <view class="section">
+      <text class="h2">一、服务说明</text>
+      <text class="p">1. 本小程序提供美容仪器体验的线上预约服务，不涉及在线诊疗、药品销售等医疗行为。</text>
+      <text class="p">2. 预约成功后，您需在约定时间到达指定地点接受体验服务。</text>
+      <text class="p">3. 体验服务由经过培训的工作人员操作，使用指定的美容仪器设备。</text>
+    </view>
+
+    <view class="section">
+      <text class="h2">二、用户义务</text>
+      <text class="p">1. 您应如实填写个人信息，确保信息真实、准确、完整。</text>
+      <text class="p">2. 您应如实告知工作人员您的健康状况、过敏史及禁忌证情况。</text>
+      <text class="p">3. 体验过程中如有任何不适，应立即告知工作人员。</text>
+      <text class="p">4. 您有权在体验的任何阶段自愿决定退出。</text>
+    </view>
+
+    <view class="section">
+      <text class="h2">三、免责声明</text>
+      <text class="p">1. 体验效果因人而异，我们不对体验效果做出任何保证性承诺。</text>
+      <text class="p">2. 因您未如实告知健康状况导致的不良后果，由您自行承担。</text>
+      <text class="p">3. 因不可抗力（自然灾害、政策变化等）导致服务无法正常提供的，我们不承担责任。</text>
+    </view>
+
+    <view class="section">
+      <text class="h2">四、知识产权</text>
+      <text class="p">1. 本小程序中的所有内容（文字、图片、设计等）的知识产权归冰美肌所有。</text>
+      <text class="p">2. 未经书面许可，任何单位和个人不得复制、传播或用于商业用途。</text>
+    </view>
+
+    <view class="section">
+      <text class="h2">五、协议修改</text>
+      <text class="p">我们有权根据法律法规和业务发展需要修改本协议。修改后的协议将在本小程序内公布，公布即生效。如您继续使用本小程序，视为同意修改后的协议。</text>
+    </view>
+  </scroll-view>
+</view>

@@ -1,0 +1,47 @@
+<nav-bar title="时段管理" showBack="{{true}}"></nav-bar>
+<view class="page">
+  <view class="action-bar">
+    <text class="action-hint">点击日期展开时段开关</text>
+    <view class="save-btn" bindtap="saveSchedule">保存</view>
+  </view>
+
+  <view class="hint">
+    <text>默认全部时段关闭，请手动开启可预约时段。未开启的时段顾客端显示「未开放」，无法预约。</text>
+  </view>
+
+  <!-- 日期列表 -->
+  <scroll-view scroll-y class="date-list">
+    <view class="date-item {{selectedDate === item.date ? 'active' : ''}}"
+      wx:for="{{dateList}}" wx:key="date" data-date="{{item.date}}" bindtap="selectDate">
+      <view class="date-left">
+        <text class="date-label">{{item.label}}</text>
+      </view>
+      <!-- 时段状态标签 -->
+      <view class="date-slots">
+        <view class="mini-slot {{item.slotStatus[index] === 'closed' ? 'closed' : 'open'}}"
+          wx:for="{{item.slotLabels}}" wx:key="*this" wx:for-item="sl" wx:for-index="index">
+          <text class="mini-slot-time">{{item.slotShort[index]}}</text>
+          <view class="mini-slot-tag">{{sl}}</view>
+        </view>
+      </view>
+      <text class="date-arrow">›</text>
+
+      <!-- 内联时段编辑面板：点击后在该日期下方展开 -->
+      <view class="edit-panel" wx:if="{{selectedDate === item.date && editing}}" catchtap="noop">
+        <view class="panel-title">{{selectedDate}} 时段开关</view>
+        <view class="toggle-row">
+          <view class="toggle-btn off" bindtap="toggleAllDay" data-open="{{false}}">全部关闭</view>
+          <view class="toggle-btn on" bindtap="toggleAllDay" data-open="{{true}}">全部开放</view>
+        </view>
+        <view class="slot-grid">
+          <view class="slot-item {{schedule[selectedDate] && schedule[selectedDate].indexOf(slot) === -1 ? 'closed' : ''}}"
+            wx:for="{{TIME_SLOTS}}" wx:for-item="slot" wx:key="*this" data-slot="{{slot}}" bindtap="toggleSlot">
+            <text class="slot-time">{{slot}}</text>
+            <view class="slot-tag" wx:if="{{schedule[selectedDate] && schedule[selectedDate].indexOf(slot) === -1}}">已关闭</view>
+            <view class="slot-tag open" wx:elif="{{!schedule[selectedDate] || schedule[selectedDate].indexOf(slot) > -1}}">可预约</view>
+          </view>
+        </view>
+      </view>
+    </view>
+  </scroll-view>
+</view>

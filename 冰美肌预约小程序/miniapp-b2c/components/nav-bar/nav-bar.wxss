@@ -1,0 +1,35 @@
+.nav-bar {
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  padding: 0 28rpx;
+  min-height: 88rpx;
+}
+.nav-left {
+  width: 80rpx;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+}
+.nav-back-arrow {
+  width: 20rpx;
+  height: 20rpx;
+  border-left: 4rpx solid #fff;
+  border-top: 4rpx solid #fff;
+  transform: rotate(-45deg);
+  margin-left: 6rpx;
+}
+.nav-title {
+  flex: 1;
+  text-align: center;
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.nav-right {
+  width: 80rpx;
+  flex-shrink: 0;
+}

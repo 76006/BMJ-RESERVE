@@ -1,0 +1,534 @@
+<nav-bar title="客户详情" showBack="{{true}}"></nav-bar>
+<!-- ===== 客户基本信息 ===== -->
+<view class="section" wx:if="{{booking}}">
+  <view class="info-header">
+    <view class="info-left">
+      <view class="info-name">{{booking.name}} {{booking.gender}} {{booking.age}}岁</view>
+      <view class="info-id">#{{booking.id}}</view>
+    </view>
+    <view class="info-right">
+      <view class="btn-call" bindtap="callPhone" wx:if="{{booking.phone}}">📞 拨号</view>
+    </view>
+  </view>
+
+
+  <!-- 状态 -->
+  <view class="action-row">
+    <view class="action-item" bindtap="openStatusPicker">
+      <text class="action-label">状态</text>
+      <view class="action-value">
+        <view class="status-badge status-{{booking._status}}">
+          {{booking._status === 'pending_confirm' ? '新预约' : ''}}{{booking._status === 'confirmed' ? '已预约' : ''}}{{booking._status === 'visited' ? '已到店' : ''}}{{booking._status === 'in_experience' ? '体验中' : ''}}{{booking._status === 'completed' ? '已体验' : ''}}{{booking._status === 'cancelled' ? '已取消' : ''}}
+        </view>
+      </view>
+      <text class="action-arrow">›</text>
+    </view>
+    <!-- 已到店状态：显示切体验中按钮 -->
+    <view class="action-item" wx:if="{{booking._status === 'visited'}}">
+      <text class="action-label">操作</text>
+      <view class="action-value">
+        <view class="status-badge status-pending_confirm" bindtap="switchToInExperience">开始体验</view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 快捷确认（新预约状态显示） -->
+  <view class="quick-confirm-bar" wx:if="{{booking._status === 'pending_confirm'}}" bindtap="quickConfirm">
+    <text class="quick-confirm-text">✓ 确认该预约时间</text>
+  </view>
+  <!-- 快捷拒绝（新预约状态显示） -->
+  <view class="quick-reject-bar" wx:if="{{booking._status === 'pending_confirm'}}" bindtap="quickReject">
+    <text class="quick-reject-text">✕ 拒绝该预约</text>
+  </view>
+
+  <!-- 签到入口（已预约状态显示） -->
+  <view class="checkin-bar" wx:if="{{booking._status === 'confirmed'}}" bindtap="goCheckIn">
+    <text class="checkin-bar-text">📍 前往现场签到</text>
+    <text class="checkin-bar-arrow">›</text>
+  </view>
+
+  <!-- 生成签到二维码（已预约状态显示） -->
+  <view class="qrcode-gen-bar" wx:if="{{booking._status === 'confirmed'}}" bindtap="genQRCode">
+    <text class="qrcode-gen-text">📱 生成签到二维码</text>
+    <text class="qrcode-gen-arrow">›</text>
+  </view>
+
+  <!-- 重新预约（已取消状态显示） -->
+  <view class="rebook-bar" wx:if="{{booking._status === 'cancelled'}}" bindtap="rebook">
+    <text class="rebook-bar-text">🔄 重新预约</text>
+    <text class="rebook-bar-arrow">›</text>
+  </view>
+
+  <!-- 设备信息（已签到后显示） -->
+  <view class="device-info-bar" wx:if="{{booking.deviceModel}}">
+    <text class="device-info-label">使用设备</text>
+    <text class="device-info-value">{{booking.deviceModel}}</text>
+    <text wx:if="{{booking.checkInAt}}" class="device-info-time">签到于 {{booking._checkInDisplay}}</text>
+  </view>
+
+  <!-- 渠道来源（有渠道时显示） -->
+  <view class="channel-info-bar" wx:if="{{booking.channel && booking.channel !== 'direct'}}">
+    <text class="channel-info-label">来源</text>
+    <text class="channel-info-value">{{booking.channel === 'medical' ? '医疗渠道' : '生美渠道'}}{{booking.trainerName ? ' · ' + booking.trainerName : ''}}</text>
+  </view>
+
+  <!-- 回访反馈快捷状态 -->
+  <view class="feedback-status-bar" wx:if="{{booking._status === 'visited' || booking._status === 'in_experience' || booking._status === 'completed'}}">
+    <text class="fb-bar-label">用户回访</text>
+    <view class="fb-bar-tags">
+      <view wx:if="{{booking._feedback30}}" class="fb-bar-tag done">30天</view>
+      <view wx:if="{{!booking._feedback30}}" class="fb-bar-tag pending">30天</view>
+      <view wx:if="{{booking._feedback90}}" class="fb-bar-tag done">90天</view>
+      <view wx:if="{{!booking._feedback90}}" class="fb-bar-tag pending">90天</view>
+    </view>
+  </view>
+
+</view>
+
+<!-- ===== 用户填写（灰色字段） ===== -->
+<view class="section">
+  <view class="section-title">用户填写</view>
+  <view class="info-grid">
+    <view class="info-cell" wx:if="{{booking.visitDate}}">
+      <text class="cell-label">体验日期</text>
+      <text class="cell-value">{{booking.visitDate}}</text>
+    </view>
+    <view class="info-cell" wx:if="{{booking.phone}}">
+      <text class="cell-label">手机号</text>
+      <text class="cell-value">{{booking.phone}}</text>
+    </view>
+    <view class="info-cell full" wx:if="{{booking.medicalHistory}}">
+      <text class="cell-label">过往美容护理经历</text>
+      <text class="cell-value">{{booking.medicalHistory}}</text>
+    </view>
+    <view class="info-cell full" wx:if="{{booking.needs}}">
+      <text class="cell-label">重点改善需求</text>
+      <text class="cell-value">{{booking.needs}}</text>
+    </view>
+  </view>
+</view>
+
+<!-- ===== 知情同意书签署 ===== -->
+<view class="section" wx:if="{{booking.consentSignName}}">
+  <view class="section-title">知情同意书</view>
+  <view class="info-grid">
+    <view class="info-cell">
+      <text class="cell-label">签署人</text>
+      <text class="cell-value">{{booking.consentSignName}}</text>
+    </view>
+    <view class="info-cell">
+      <text class="cell-label">签署时间</text>
+      <text class="cell-value">{{booking.consentSignTimeDisplay}}</text>
+    </view>
+    <view class="info-cell full" wx:if="{{booking.consentPhotoAuth1 || booking.consentPhotoAuth2}}">
+      <text class="cell-label">摄影授权</text>
+      <text class="cell-value">{{booking.consentPhotoAuth1 ? '✅ 护理存档' : ''}}{{booking.consentPhotoAuth1 && booking.consentPhotoAuth2 ? ' / ' : ''}}{{booking.consentPhotoAuth2 ? '✅ 宣传展示' : ''}}</text>
+    </view>
+  </view>
+</view>
+
+<!-- ===== 工作人员填写（黄色字段） ===== -->
+<!-- 仅体验中/已体验显示 -->
+<view class="section" wx:if="{{booking._status === 'in_experience' || booking._status === 'completed'}}">
+  <view class="section-header">
+    <view class="section-title">体验参数记录</view>
+    <view class="btn-edit" bindtap="startEditStaff" wx:if="{{!isEditingStaff}}">编辑</view>
+  </view>
+
+  <!-- 只读模式 -->
+  <view wx:if="{{!isEditingStaff}}">
+    <view wx:if="{{!booking._clientManager && !booking._totalEnergy && !booking._shotDistribution && !booking._maxLevel && !booking.deviceModel && !booking._immediateSatisfaction && !booking._comfortSatisfaction && booking._photos.length === 0 && booking._beforePhotos.length === 0 && booking._halfPhotos.length === 0 && booking._afterPhotos.length === 0 && !booking._productFeedback && !booking._day1FollowUp && !booking._day30FollowUp && !booking._day90FollowUp}}" class="note-empty">体验完成后由工作人员补录</view>
+    <view wx:else>
+      <view class="info-grid">
+        <view class="info-cell" wx:if="{{booking._clientManager}}">
+          <text class="cell-label">客户负责人</text>
+          <text class="cell-value">{{booking._clientManager}}</text>
+        </view>
+        <view class="info-cell" wx:if="{{booking._totalEnergy}}">
+          <text class="cell-label">累计能量</text>
+          <text class="cell-value">{{booking._totalEnergy}}</text>
+        </view>
+        <view class="info-cell" wx:if="{{booking._shotDistribution}}">
+          <text class="cell-label">发数分配</text>
+          <text class="cell-value">{{booking._shotDistribution}}</text>
+        </view>
+        <view class="info-cell" wx:if="{{booking._maxLevel}}">
+          <text class="cell-label">可接受的最高档位</text>
+          <text class="cell-value">{{booking._maxLevel}}</text>
+        </view>
+        <view class="info-cell" wx:if="{{booking.deviceModel}}">
+          <text class="cell-label">体验设备</text>
+          <text class="cell-value">{{booking.deviceModel}}</text>
+        </view>
+      </view>
+      <!-- 照片 -->
+      <view class="photo-section" wx:if="{{booking._photos.length > 0}}">
+        <view class="cell-label">上传照片</view>
+        <view class="photo-grid">
+          <image wx:for="{{booking._photos}}" wx:key="name" src="{{item.path}}" mode="aspectFill" class="photo-item" data-idx="{{index}}" bindtap="previewPhoto"/>
+        </view>
+      </view>
+      <view class="info-cell full" wx:if="{{booking._productFeedback}}">
+        <text class="cell-label">产品优化意见</text>
+        <text class="cell-value">{{booking._productFeedback}}</text>
+      </view>
+      <!-- 回访记录 -->
+      <view wx:if="{{booking._day1FollowUp || booking._day30FollowUp || booking._day90FollowUp}}">
+        <view class="cell-label" style="margin-top:16rpx;">回访记录</view>
+        <view class="info-cell full" wx:if="{{booking._day1FollowUp}}" style="margin-top:10rpx;">
+          <text class="cell-label">Day1</text>
+          <text class="cell-value">{{booking._day1FollowUp}}</text>
+        </view>
+        <view class="info-cell full" wx:if="{{booking._day30FollowUp}}" style="margin-top:10rpx;">
+          <text class="cell-label">Day30</text>
+          <text class="cell-value">{{booking._day30FollowUp}}</text>
+        </view>
+        <view class="info-cell full" wx:if="{{booking._day90FollowUp}}" style="margin-top:10rpx;">
+          <text class="cell-label">Day90</text>
+          <text class="cell-value">{{booking._day90FollowUp}}</text>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 编辑模式 -->
+  <view wx:else class="edit-area">
+    <view class="exp-form">
+
+      <view class="exp-field">
+        <text class="exp-label">客户负责人</text>
+        <input placeholder="姓名" value="{{editStaff._clientManager}}" bindinput="onStaffField" data-key="_clientManager" placeholder-class="ph"/>
+      </view>
+
+      <view class="form-row">
+        <view class="exp-field half">
+          <text class="exp-label">累计能量</text>
+          <input placeholder="如：21.45kj" value="{{editStaff._totalEnergy}}" bindinput="onStaffField" data-key="_totalEnergy" placeholder-class="ph"/>
+        </view>
+        <view class="exp-field half">
+          <text class="exp-label">发数分配</text>
+          <input placeholder="如：左右脸各450发" value="{{editStaff._shotDistribution}}" bindinput="onStaffField" data-key="_shotDistribution" placeholder-class="ph"/>
+        </view>
+      </view>
+
+      <view class="exp-field">
+        <text class="exp-label">可接受的最高档位</text>
+        <input placeholder="如：3.5-5.0" value="{{editStaff._maxLevel}}" bindinput="onStaffField" data-key="_maxLevel" placeholder-class="ph"/>
+      </view>
+
+      <view class="exp-field">
+        <text class="exp-label">体验设备</text>
+        <input placeholder="如：MJ6-PRO-001" value="{{editStaff.deviceModel}}" bindinput="onStaffField" data-key="deviceModel" placeholder-class="ph"/>
+      </view>
+
+      <!-- 上传照片（三栏分类） -->
+      <view class="exp-field">
+        <text class="exp-label">上传照片</text>
+        <view class="photo-compare-upload">
+          <view class="comp-upload-col">
+            <text class="comp-upload-label">体验前</text>
+            <view class="comp-upload-area" bindtap="chooseCompPhoto" data-type="before">
+              <image wx:if="{{editStaff._beforePhotos && editStaff._beforePhotos.length > 0}}" src="{{editStaff._beforePhotos[0].path}}" mode="aspectFill" class="comp-upload-photo"/>
+              <text wx:else class="comp-upload-add">+</text>
+            </view>
+            <text class="comp-del" wx:if="{{editStaff._beforePhotos && editStaff._beforePhotos.length > 0}}" bindtap="delCompPhoto" data-type="before">删除</text>
+          </view>
+          <view class="comp-upload-col">
+            <text class="comp-upload-label">半侧脸对比</text>
+            <view class="comp-upload-area" bindtap="chooseCompPhoto" data-type="half">
+              <image wx:if="{{editStaff._halfPhotos && editStaff._halfPhotos.length > 0}}" src="{{editStaff._halfPhotos[0].path}}" mode="aspectFill" class="comp-upload-photo"/>
+              <text wx:else class="comp-upload-add">+</text>
+            </view>
+            <text class="comp-del" wx:if="{{editStaff._halfPhotos && editStaff._halfPhotos.length > 0}}" bindtap="delCompPhoto" data-type="half">删除</text>
+          </view>
+          <view class="comp-upload-col">
+            <text class="comp-upload-label">体验后</text>
+            <view class="comp-upload-area" bindtap="chooseCompPhoto" data-type="after">
+              <image wx:if="{{editStaff._afterPhotos && editStaff._afterPhotos.length > 0}}" src="{{editStaff._afterPhotos[0].path}}" mode="aspectFill" class="comp-upload-photo"/>
+              <text wx:else class="comp-upload-add">+</text>
+            </view>
+            <text class="comp-del" wx:if="{{editStaff._afterPhotos && editStaff._afterPhotos.length > 0}}" bindtap="delCompPhoto" data-type="after">删除</text>
+          </view>
+        </view>
+      </view>
+
+      <view class="exp-field">
+        <text class="exp-label">产品优化意见</text>
+        <textarea class="edit-textarea" value="{{editStaff._productFeedback}}" bindinput="onStaffField" data-key="_productFeedback" placeholder="客户对产品/体验的优化建议..." maxlength="500" placeholder-class="ph"/>
+      </view>
+
+      <!-- 回访记录 -->
+      <view class="exp-field">
+        <text class="exp-label">回访记录</text>
+      </view>
+      <view class="exp-field">
+        <text class="exp-label sub">Day1 回访</text>
+        <textarea class="edit-textarea" value="{{editStaff._day1FollowUp}}" bindinput="onStaffField" data-key="_day1FollowUp" placeholder="是否回访/长期效果反馈/是否有不良反应" maxlength="500" placeholder-class="ph"/>
+      </view>
+      <view class="exp-field">
+        <text class="exp-label sub">Day30 回访</text>
+        <textarea class="edit-textarea" value="{{editStaff._day30FollowUp}}" bindinput="onStaffField" data-key="_day30FollowUp" placeholder="30天回访记录..." maxlength="500" placeholder-class="ph"/>
+      </view>
+      <view class="exp-field">
+        <text class="exp-label sub">Day90 回访</text>
+        <textarea class="edit-textarea" value="{{editStaff._day90FollowUp}}" bindinput="onStaffField" data-key="_day90FollowUp" placeholder="90天回访记录..." maxlength="500" placeholder-class="ph"/>
+      </view>
+
+    </view>
+    <view class="edit-actions">
+      <button class="btn-cancel" bindtap="cancelEditStaff">取消</button>
+      <button class="btn-save" bindtap="saveStaff">保存</button>
+    </view>
+  </view>
+</view>
+
+<!-- ===== 照片对比 ===== -->
+<!-- 仅体验中/已体验显示 -->
+<view class="section" wx:if="{{booking._status === 'in_experience' || booking._status === 'completed'}}">
+  <view class="section-header">
+    <view class="section-title">照片对比</view>
+    <view class="btn-edit" bindtap="startUploadPhoto" wx:if="{{booking._status === 'in_experience' || booking._status === 'completed'}}">上传</view>
+  </view>
+  <view wx:if="{{(!booking._beforePhotos || booking._beforePhotos.length === 0) && (!booking._afterPhotos || booking._afterPhotos.length === 0) && (!booking._halfPhotos || booking._halfPhotos.length === 0)}}" class="note-empty">体验后由工作人员上传照片进行效果对比</view>
+  <view wx:else class="photo-compare">
+    <view class="comp-col">
+      <view class="comp-label">体验前</view>
+      <view class="comp-area">
+        <image wx:if="{{booking._beforePhotos.length > 0}}" src="{{booking._beforePhotos[0].path}}" mode="aspectFill" class="comp-photo" data-idx="0" data-type="before" bindtap="previewCompPhoto"></image>
+        <view wx:else class="comp-empty">暂无</view>
+      </view>
+    </view>
+    <view class="comp-col">
+      <view class="comp-label">半侧脸对比</view>
+      <view class="comp-area">
+        <image wx:if="{{booking._halfPhotos.length > 0}}" src="{{booking._halfPhotos[0].path}}" mode="aspectFill" class="comp-photo" data-idx="0" data-type="half" bindtap="previewCompPhoto"></image>
+        <view wx:else class="comp-empty">暂无</view>
+      </view>
+    </view>
+    <view class="comp-col">
+      <view class="comp-label">体验后</view>
+      <view class="comp-area">
+        <image wx:if="{{booking._afterPhotos.length > 0}}" src="{{booking._afterPhotos[0].path}}" mode="aspectFill" class="comp-photo" data-idx="0" data-type="after" bindtap="previewCompPhoto"></image>
+        <view wx:else class="comp-empty">暂无</view>
+      </view>
+    </view>
+  </view>
+</view>
+
+<!-- ===== 回访反馈 ===== -->
+<!-- 仅已体验状态显示 -->
+<view class="section" wx:if="{{booking._status === 'completed' && (feedback24 || feedback30 || feedback90)}}">
+  <view class="section-title">回访反馈</view>
+
+  <view class="feedback-block" wx:if="{{feedback24}}">
+    <view class="fb-header">
+      <view class="fb-title">24小时回访</view>
+      <view class="fb-date">{{feedback24.submittedAtDisplay}}</view>
+    </view>
+    <view class="fb-scores">
+      <view class="fb-score-item" wx:for="{{feedback24.areaList}}" wx:for-item="area" wx:key="key" wx:if="{{area.score > 0}}">
+        <text class="fb-area">{{area.label}}</text>
+        <view class="fb-stars">
+          <text wx:for="{{[1,2,3,4,5]}}" wx:key="*this" class="fb-star {{index < area.score ? 'on' : ''}}">★</text>
+        </view>
+      </view>
+    </view>
+    <view class="fb-therapist" wx:if="{{feedback24.therapistList}}">
+      <view class="fb-therapist-title">操作师评价</view>
+      <view class="fb-score-item" wx:for="{{feedback24.therapistList}}" wx:for-item="t" wx:key="key" wx:if="{{t.score > 0}}">
+        <text class="fb-area">{{t.label}}</text>
+        <view class="fb-stars">
+          <text wx:for="{{[1,2,3,4,5]}}" wx:key="*this" class="fb-star {{index < t.score ? 'on' : ''}}">★</text>
+        </view>
+      </view>
+    </view>
+    <view class="fb-experience" wx:if="{{feedback24.experienceList}}">
+      <view class="fb-therapist-title">体验满意度</view>
+      <view class="fb-score-item" wx:for="{{feedback24.experienceList}}" wx:for-item="exp" wx:key="key" wx:if="{{exp.score > 0}}">
+        <text class="fb-area">{{exp.label}}</text>
+        <view class="fb-stars">
+          <text wx:for="{{[1,2,3,4,5]}}" wx:key="*this" class="fb-star {{index < exp.score ? 'on' : ''}}">★</text>
+        </view>
+      </view>
+    </view>
+    <view class="fb-remark" wx:if="{{feedback24.remark}}">
+      <text class="fb-label">客户反馈</text>
+      <text class="fb-text">{{feedback24.remark}}</text>
+    </view>
+    <view class="fb-photos" wx:if="{{feedback24.photos.length > 0}}">
+      <image wx:for="{{feedback24.photos}}" wx:key="*this" src="{{item}}" mode="aspectFill" class="fb-photo" data-type="feedback24" data-idx="{{index}}" bindtap="previewFbPhoto"/>
+    </view>
+  </view>
+
+  <view class="feedback-block" wx:if="{{feedback30}}">
+    <view class="fb-header">
+      <view class="fb-title">30天回访</view>
+      <view class="fb-date">{{feedback30.submittedAtDisplay}}</view>
+    </view>
+    <view class="fb-scores">
+      <view class="fb-score-item" wx:for="{{feedback30.areaList}}" wx:for-item="area" wx:key="key" wx:if="{{area.score > 0}}">
+        <text class="fb-area">{{area.label}}</text>
+        <view class="fb-stars">
+          <text wx:for="{{[1,2,3,4,5]}}" wx:key="*this" class="fb-star {{index < area.score ? 'on' : ''}}">★</text>
+        </view>
+      </view>
+    </view>
+    <view class="fb-experience" wx:if="{{feedback30.experienceList}}">
+      <view class="fb-therapist-title">体验满意度</view>
+      <view class="fb-score-item" wx:for="{{feedback30.experienceList}}" wx:for-item="exp" wx:key="key" wx:if="{{exp.score > 0}}">
+        <text class="fb-area">{{exp.label}}</text>
+        <view class="fb-stars">
+          <text wx:for="{{[1,2,3,4,5]}}" wx:key="*this" class="fb-star {{index < exp.score ? 'on' : ''}}">★</text>
+        </view>
+      </view>
+    </view>
+    <view class="fb-remark" wx:if="{{feedback30.remark}}">
+      <text class="fb-label">客户反馈</text>
+      <text class="fb-text">{{feedback30.remark}}</text>
+    </view>
+    <view class="fb-photos" wx:if="{{feedback30.photos.length > 0}}">
+      <image wx:for="{{feedback30.photos}}" wx:key="*this" src="{{item}}" mode="aspectFill" class="fb-photo" data-type="feedback30" data-idx="{{index}}" bindtap="previewFbPhoto"/>
+    </view>
+  </view>
+
+  <view class="feedback-block" wx:if="{{feedback90}}" style="margin-top:12rpx;">
+    <view class="fb-header">
+      <view class="fb-title">90天回访</view>
+      <view class="fb-date">{{feedback90.submittedAtDisplay}}</view>
+    </view>
+    <view class="fb-scores">
+      <view class="fb-score-item" wx:for="{{feedback90.areaList}}" wx:for-item="area" wx:key="key" wx:if="{{area.score > 0}}">
+        <text class="fb-area">{{area.label}}</text>
+        <view class="fb-stars">
+          <text wx:for="{{[1,2,3,4,5]}}" wx:key="*this" class="fb-star {{index < area.score ? 'on' : ''}}">★</text>
+        </view>
+      </view>
+    </view>
+    <view class="fb-experience" wx:if="{{feedback90.experienceList}}">
+      <view class="fb-therapist-title">体验满意度</view>
+      <view class="fb-score-item" wx:for="{{feedback90.experienceList}}" wx:for-item="exp" wx:key="key" wx:if="{{exp.score > 0}}">
+        <text class="fb-area">{{exp.label}}</text>
+        <view class="fb-stars">
+          <text wx:for="{{[1,2,3,4,5]}}" wx:key="*this" class="fb-star {{index < exp.score ? 'on' : ''}}">★</text>
+        </view>
+      </view>
+    </view>
+    <!-- 二次体验意愿 -->
+    <view class="fb-retry" wx:if="{{feedback90.retry}}">
+      <text class="fb-label">二次体验意愿</text>
+      <view class="fb-retry-tag {{feedback90.retry === 'yes' ? 'yes' : 'no'}}">{{feedback90.retry === 'yes' ? '是' : '否'}}</view>
+      <text class="fb-text" wx:if="{{feedback90.retryReason}}" style="margin-top:8rpx;">{{feedback90.retryReason}}</text>
+    </view>
+    <view class="fb-remark" wx:if="{{feedback90.remark}}">
+      <text class="fb-label">客户反馈</text>
+      <text class="fb-text">{{feedback90.remark}}</text>
+    </view>
+    <view class="fb-photos" wx:if="{{feedback90.photos.length > 0}}">
+      <image wx:for="{{feedback90.photos}}" wx:key="*this" src="{{item}}" mode="aspectFill" class="fb-photo" data-type="feedback90" data-idx="{{index}}" bindtap="previewFbPhoto"/>
+    </view>
+  </view>
+</view>
+
+<!-- ===== 内部备注 ===== -->
+<view class="section">
+  <view class="section-header">
+    <view class="section-title">内部备注</view>
+    <view class="btn-edit" bindtap="startEditNote" wx:if="{{!isEditingNote}}">编辑</view>
+  </view>
+  <view wx:if="{{!isEditingNote}}">
+    <view class="note-content" wx:if="{{booking._adminNote}}">{{booking._adminNote}}</view>
+    <view class="note-empty" wx:else>暂无备注</view>
+  </view>
+  <view wx:else class="edit-area">
+    <textarea class="edit-textarea" value="{{editNote}}" bindinput="onNoteInput" placeholder="输入内部备注..." auto-focus maxlength="500" />
+    <view class="edit-actions">
+      <button class="btn-cancel" bindtap="cancelEditNote">取消</button>
+      <button class="btn-save" bindtap="saveNote">保存</button>
+    </view>
+  </view>
+</view>
+
+<!-- ===== 跟进记录 ===== -->
+<view class="section" style="padding-bottom:40rpx;">
+  <view class="section-header">
+    <view class="section-title">跟进记录</view>
+    <view class="btn-edit" bindtap="startEditFollowUp" wx:if="{{!isEditingFollowUp}}">+ 添加</view>
+  </view>
+  <view wx:if="{{!isEditingFollowUp}}">
+    <view wx:if="{{booking._followUpRecords.length === 0}}" class="note-empty">暂无跟进记录</view>
+    <view wx:else class="followup-list">
+      <view class="followup-item" wx:for="{{booking._followUpRecords}}" wx:key="date">
+        <view class="followup-time">{{item.dateDisplay}}</view>
+        <view class="followup-content">{{item.content}}</view>
+      </view>
+    </view>
+  </view>
+  <view wx:else class="edit-area">
+    <textarea class="edit-textarea" value="{{newFollowUp}}" bindinput="onFollowUpInput" placeholder="输入跟进内容..." auto-focus maxlength="500" />
+    <view class="edit-actions">
+      <button class="btn-cancel" bindtap="cancelEditFollowUp">取消</button>
+      <button class="btn-save" bindtap="saveFollowUp">保存</button>
+    </view>
+  </view>
+</view>
+
+
+
+<!-- ===== 状态选择弹窗 ===== -->
+<view class="overlay" wx:if="{{showStatusPicker}}" bindtap="closeStatusPicker" catchtouchmove="stop"></view>
+<view class="picker" wx:if="{{showStatusPicker}}" catchtouchmove="stop">
+  <view class="picker-title">选择状态</view>
+  <view class="picker-option" wx:for="{{booking._status === 'confirmed' ? ['pending_confirm','confirmed','visited','in_experience','completed','cancelled'] : ['pending_confirm','confirmed','visited','in_experience','completed']}}" wx:key="*this" bindtap="changeStatus" data-key="{{item}}">
+    <text>{{item === 'pending_confirm' ? '新预约' : ''}}{{item === 'confirmed' ? '已预约' : ''}}{{item === 'visited' ? '已到店' : ''}}{{item === 'in_experience' ? '体验中' : ''}}{{item === 'completed' ? '已体验' : ''}}{{item === 'cancelled' ? '已取消' : ''}}</text>
+    <text wx:if="{{booking._status === item}}">✓</text>
+  </view>
+  <view class="picker-cancel" bindtap="closeStatusPicker">取消</view>
+</view>
+
+<!-- ===== 取消原因弹窗 ===== -->
+<view class="overlay" wx:if="{{showCancelModal}}" bindtap="closeCancelModal" catchtouchmove="stop"></view>
+<view class="cancel-modal" wx:if="{{showCancelModal}}" catchtouchmove="stop">
+  <view class="cancel-modal-title">取消预约</view>
+  <view class="cancel-modal-body">
+    <text class="cancel-modal-label">请填写取消原因</text>
+    <textarea class="cancel-reason-input" placeholder="请输入取消原因..." value="{{cancelReason}}" bindinput="onCancelReasonInput" maxlength="200" auto-focus="{{true}}"></textarea>
+  </view>
+  <view class="cancel-modal-actions">
+    <button class="cancel-modal-btn secondary" bindtap="closeCancelModal">返回</button>
+    <button class="cancel-modal-btn primary" bindtap="confirmCancel">确认取消</button>
+  </view>
+</view>
+
+<!-- ===== 签到二维码弹窗 ===== -->
+<view class="overlay" wx:if="{{showQRModal}}" bindtap="closeQRModal" catchtouchmove="stop"></view>
+<view class="qr-modal" wx:if="{{showQRModal}}" catchtouchmove="stop">
+  <view class="qr-modal-title">签到二维码</view>
+  <view class="qr-modal-sub">顾客微信扫码即可自助签到</view>
+  <view class="qr-canvas-wrap">
+    <view class="qr-grid" style="width:{{qrSize}}px;height:{{qrSize}}px;">
+      <view wx:for="{{qrRows}}" wx:for-item="row" wx:key="r" class="qr-row" style="height:{{qrCellSize}}px;">
+        <view wx:for="{{row}}" wx:for-item="cell" wx:for-index="c" wx:key="c"
+              class="qr-cell {{cell ? 'cell-dark' : 'cell-light'}}"
+              style="width:{{qrCellSize}}px;height:{{qrCellSize}}px;">
+        </view>
+      </view>
+    </view>
+  </view>
+  <view class="qr-modal-info">
+    <text class="qr-info-label">预约编号</text>
+    <text class="qr-info-value">{{booking.id}}</text>
+  </view>
+  <view class="qr-modal-info">
+    <text class="qr-info-label">预约人</text>
+    <text class="qr-info-value">{{booking.name}} · {{booking.visitDate}}</text>
+  </view>
+  <view class="qr-modal-help">
+    开发工具内测：点击下方"模拟扫码签到"<br/>正式环境：顾客微信扫码上方二维码签到
+  </view>
+  <view class="qr-modal-actions">
+    <button class="qr-modal-btn sim" bindtap="simCheckIn">模拟扫码签到</button>
+    <button class="qr-modal-btn close" bindtap="closeQRModal">关闭</button>
+  </view>
+</view>
+
+

@@ -1,0 +1,251 @@
+<nav-bar bgColor="transparent"></nav-bar>
+<!-- ===== 头部（按角色切换Hero图） ===== -->
+<view class="mine-header">
+  <image src="/images/mine_hero_scene.jpg" mode="aspectFill" class="mine-hero-bg" wx:if="{{previewRole === 'user' || (!isAdmin && previewRole !== 'staff' && previewRole !== 'admin')}}"></image>
+  <image src="/images/mine_hero_staff.jpg" mode="aspectFill" class="mine-hero-bg" wx:elif="{{previewRole === 'staff' || (isAdmin && adminRole === 'staff' && !previewRole)}}"></image>
+  <image src="/images/mine_hero_staff.jpg" mode="aspectFill" class="mine-hero-bg" wx:elif="{{previewRole === 'admin' || (isAdmin && adminRole === 'superadmin' && !previewRole)}}"></image>
+  <view class="mine-hero-overlay"></view>
+  <view class="avatar-area">
+    <view class="avatar">👤</view>
+    <block wx:if="{{isAdmin && previewRole !== 'user'}}">
+      <view class="welcome">{{adminName}} · 工作台</view>
+    </block>
+    <block wx:else>
+      <view class="welcome">{{greeting}}</view>
+      <view class="visit-info" wx:if="{{!isAdmin || previewRole === 'user'}}">
+        <text class="visit-count">第{{visitCount + 1}}次体验</text>
+        <text class="last-visit" wx:if="{{!isFirstVisit}}">上次体验：{{lastVisitDate}}</text>
+      </view>
+    </block>
+    <view class="brand">冰美肌</view>
+  </view>
+</view>
+
+
+<!-- ===== 视角切换器（仅管理员可见） ===== -->
+<block wx:if="{{isAdmin}}">
+  <view class="role-switcher">
+    <view class="role-tab {{previewRole === 'user' ? 'active' : ''}}" data-role="user" bindtap="switchPreviewRole">
+      <text>👤 用户视角</text>
+    </view>
+    <view class="role-tab {{previewRole === 'staff' || (!previewRole && adminRole === 'staff') ? 'active' : ''}}" data-role="staff" bindtap="switchPreviewRole">
+      <text>💼 操作师</text>
+    </view>
+    <view class="role-tab {{previewRole === 'admin' || (!previewRole && adminRole === 'superadmin') ? 'active' : ''}}" data-role="admin" bindtap="switchPreviewRole">
+      <text>⚙️ 管理员</text>
+    </view>
+  </view>
+  <view class="dev-role-bar" wx:if="{{isDevtools}}">
+    <text class="dev-role-hint">当前：管理员模式</text>
+    <view class="dev-role-btn dev-role-btn-outline" bindtap="exitAdmin">退出管理员</view>
+  </view>
+</block>
+
+<!-- ===== 开发工具视角切换（用户视角下也能看到） ===== -->
+<block wx:elif="{{isDevtools && !isAdmin}}">
+  <view class="dev-role-bar">
+    <text class="dev-role-hint">当前：用户视角</text>
+    <view class="dev-role-btn" bindtap="quickSwitchToAdmin">切换为管理员</view>
+  </view>
+</block>
+
+
+<!-- ========================================== -->
+<!-- 操作师/管理员视图 -->
+<!-- ========================================== -->
+<block wx:if="{{isAdmin && previewRole !== 'user'}}">
+
+  <!-- 工作台概览 -->
+  <view class="section admin-overview">
+    <view class="overview-grid">
+      <view class="overview-card urgent" bindtap="goAdminList">
+        <view class="overview-num">{{pendingCount}}</view>
+        <view class="overview-label">待处理</view>
+      </view>
+      <view class="overview-card">
+        <view class="overview-num">{{todayCount}}</view>
+        <view class="overview-label">今日排期</view>
+      </view>
+      <view class="overview-card" bindtap="goAdminList">
+        <view class="overview-num">{{totalCount}}</view>
+        <view class="overview-label">总客户</view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 快捷入口 -->
+  <view class="section admin-shortcuts">
+    <view class="shortcut-item" bindtap="goAdminList">
+      <text class="shortcut-icon">📋</text>
+      <text class="shortcut-text">客户管理</text>
+      <text class="shortcut-arrow">›</text>
+    </view>
+    <view class="shortcut-item" bindtap="goDashboard">
+      <text class="shortcut-icon">📊</text>
+      <text class="shortcut-text">数据看板</text>
+      <text class="shortcut-arrow">›</text>
+    </view>
+    <view class="shortcut-item" bindtap="goAdminSchedule">
+      <text class="shortcut-icon">📅</text>
+      <text class="shortcut-text">时段管理</text>
+      <text class="shortcut-arrow">›</text>
+    </view>
+    <view class="shortcut-item" bindtap="goFeedbacksAdmin">
+      <text class="shortcut-icon">📝</text>
+      <text class="shortcut-text">回访问卷管理</text>
+      <text class="shortcut-arrow">›</text>
+    </view>
+    <view class="shortcut-item" bindtap="goQrcodeConfig">
+      <text class="shortcut-icon">📱</text>
+      <text class="shortcut-text">二维码配置</text>
+      <text class="shortcut-arrow">›</text>
+    </view>
+    <view class="shortcut-item" wx:if="{{adminRole === 'superadmin' && !previewRole}}" bindtap="goStaffManage">
+      <text class="shortcut-icon">👥</text>
+      <text class="shortcut-text">人员管理</text>
+      <text class="shortcut-arrow">›</text>
+    </view>
+  </view>
+  <view class="admin-bottom-space"></view>
+
+</block>
+
+
+<!-- ========================================== -->
+<!-- 普通用户视图 -->
+<!-- ========================================== -->
+<block wx:else>
+
+  <!-- 未登录：手机号登录入口 -->
+  <view class="section login-area" wx:if="{{!isLoggedIn}}">
+    <view class="login-card">
+      <button class="login-btn" open-type="getPhoneNumber" bindgetphonenumber="onLogin">
+        登录
+      </button>
+    </view>
+  </view>
+
+  <!-- 基本资料（不可变） -->
+  <view class="section profile-section" wx:if="{{isLoggedIn}}">
+    <view class="section-title">基本资料</view>
+    <view class="profile-card">
+      <view class="profile-row">
+        <text class="profile-label">姓名</text>
+        <text class="profile-value">{{userName || '-'}}</text>
+      </view>
+      <view class="profile-row">
+        <text class="profile-label">性别</text>
+        <text class="profile-value">{{userGender || '-'}}</text>
+      </view>
+      <view class="profile-row">
+        <text class="profile-label">年龄</text>
+        <text class="profile-value">{{userAge ? userAge + '岁' : '-'}}</text>
+      </view>
+      <view class="profile-row">
+        <text class="profile-label">手机号</text>
+        <text class="profile-value">{{userPhone || '-'}}</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 客服 -->
+  <view class="section service">
+    <view class="section-title">联系客服</view>
+    <view class="service-grid">
+      <view class="service-card" bindtap="callPhone">
+        <text class="service-icon-text">📞</text>
+        <view class="service-name">电话咨询</view>
+        <view class="service-detail">郭小姐 19117352642</view>
+      </view>
+      <view class="service-card" bindtap="openServiceQr">
+        <text class="service-icon-text">💬</text>
+        <view class="service-name">微信咨询</view>
+        <view class="service-detail">联系企业客服</view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 企业微信客服二维码弹窗 -->
+  <view class="qr-mask" wx:if="{{showServiceQr}}" bindtap="closeServiceQr">
+    <view class="qr-box" catchtap="preventClose">
+      <view class="qr-close" bindtap="closeServiceQr">✕</view>
+      <view class="qr-title">企业微信客服</view>
+      <image class="qr-img" src="{{serviceQrImage}}" mode="aspectFit" show-menu-by-longpress="{{true}}"></image>
+      <view class="qr-tip">长按识别二维码，添加企业微信客服</view>
+      <view class="qr-actions">
+        <button class="qr-btn qr-btn-ghost" bindtap="closeServiceQr">关闭</button>
+      </view>
+    </view>
+  </view>
+
+  <!-- 预约记录（可变状态） -->
+  <view class="section records" wx:if="{{isLoggedIn}}">
+    <view class="section-title">预约记录</view>
+
+    <view wx:if="{{bookings.length === 0}}" class="empty">
+      <text class="empty-icon">📋</text>
+      <text class="empty-text">暂无预约记录</text>
+      <button class="btn-primary" style="margin-top:32rpx" bindtap="goBook">立即预约体验</button>
+    </view>
+
+    <view wx:else class="booking-list">
+      <view class="booking-card" wx:for="{{bookings}}" wx:key="id" data-id="{{item.id}}" data-can-feedback="{{item.canFeedback}}" bindtap="goFeedback">
+        <view class="booking-top">
+          <view class="booking-id">#{{index + 1}}</view>
+          <view class="booking-status {{item.userStatus === '新预约' ? 'status-pending-confirm' : ''}} {{item.userStatus === '已预约' ? 'status-confirmed' : ''}} {{item.userStatus === '已到店' ? 'visited' : ''}} {{item.userStatus === '体验中' ? 'in-experience' : ''}} {{item.userStatus === '已体验' ? 'completed' : ''}} {{item.userStatus === '已取消' ? 'cancelled' : ''}}">{{item.userStatus}}</view>
+        </view>
+        <view class="booking-confirm-hint" wx:if="{{item.userStatus === '新预约'}}">
+          ⏳ 我们将在24小时内确认您的预约时间，请留意通知
+        </view>
+        <view class="booking-confirmed-hint" wx:if="{{item.userStatus === '已预约'}}">
+          ✅ 预约成功，请按时到店体验
+        </view>
+        <view class="booking-body">
+          <view class="booking-row">
+            <text class="booking-label">预约时间</text>
+            <text class="booking-value">{{item.visitDate}} {{item.visitTime}}</text>
+          </view>
+          <view class="booking-row" wx:if="{{item.needs}}">
+            <text class="booking-label">改善需求</text>
+            <text class="booking-value">{{item.needs}}</text>
+          </view>
+        </view>
+        <!-- 新预约：待门店确认 -->
+        <view class="booking-footer" wx:if="{{item.userStatus === '新预约'}}">
+          <text class="booking-tap-hint dim">⏳ 待门店确认</text>
+        </view>
+        <!-- 已预约：按时到店 -->
+        <view class="booking-footer" wx:elif="{{item.userStatus === '已预约'}}">
+          <text class="booking-tap-hint dim">✅ 已确认，按时到店即可</text>
+        </view>
+        <!-- 已取消：取消原因 + 重新预约 -->
+        <view class="booking-footer" wx:elif="{{item.userStatus === '已取消'}}">
+          <text class="booking-tap-hint dim" wx:if="{{item._cancelReason}}">取消原因：{{item._cancelReason}}</text>
+          <view class="booking-action" data-id="{{item.id}}" catchtap="rebook">
+            <text class="booking-tap-hint">重新预约 →</text>
+          </view>
+        </view>
+        <!-- 已到店/已体验：问卷 + 护理须知（体验后才触发） -->
+        <view class="booking-footer" wx:elif="{{item._status === 'visited' || item._status === 'in_experience' || item._status === 'completed'}}">
+          <block wx:if="{{item.isDone}}">
+            <text class="booking-tap-hint dim">体验已完成</text>
+          </block>
+          <block wx:else>
+            <block wx:if="{{item.canAftercare}}">
+              <view class="booking-action" data-id="{{item.id}}" data-modes="{{item.availableAftercares}}" catchtap="goAftercare">
+                <text class="booking-tap-hint">查看护理须知 →</text>
+              </view>
+            </block>
+            <block wx:if="{{item.canFeedback}}">
+              <view class="booking-action" data-id="{{item.id}}" data-modes="{{item.availableFeedbacks}}" catchtap="goFeedback">
+                <text class="booking-tap-hint">填写回访问卷 →</text>
+              </view>
+            </block>
+            <text class="booking-tap-hint dim" wx:if="{{!item.canAftercare && !item.canFeedback}}">回访时间未到</text>
+          </block>
+        </view>
+      </view>
+    </view>
+  </view>
+
+</block>

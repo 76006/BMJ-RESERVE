@@ -1,0 +1,198 @@
+.admin-header {
+  background: #6B7280;
+  padding: 24rpx 32rpx 28rpx;
+}
+.admin-title { font-size: 40rpx; font-weight: 700; color: white; }
+.admin-sub { font-size: 24rpx; color: rgba(255,255,255,0.7); margin-top: 8rpx; }
+.admin-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 20rpx;
+}
+.action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28rpx;
+  border-radius: 12rpx;
+  padding: 20rpx 40rpx;
+  color: white;
+  font-weight: 600;
+}
+.btn-purple { background: #3B0764; }
+.btn-green { background: #10B981; }
+.btn-red { background: #EF4444; }
+
+/* Filter Bar */
+.filter-bar {
+  background: white;
+  white-space: nowrap;
+  padding: 24rpx 32rpx;
+  border-bottom: 1rpx solid var(--light-gray);
+}
+.filter-item {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12rpx 28rpx;
+  margin-right: 16rpx;
+  border-radius: 9999rpx;
+  font-size: 24rpx;
+  color: var(--text-muted);
+  background: var(--bg);
+}
+.filter-item.active {
+  background: #3B0764;
+  color: white;
+}
+
+/* List */
+.empty {
+  text-align: center;
+  padding: 30rpx 0;
+}
+.empty-icon { font-size: 80rpx; display: block; margin-bottom: 16rpx; }
+.empty-text { font-size: 28rpx; color: var(--mid-gray); }
+
+.list { padding: 24rpx 32rpx max(40rpx, env(safe-area-inset-bottom)); }
+.card {
+  background: white;
+  border-radius: 16rpx;
+  padding: 28rpx;
+  margin-bottom: 20rpx;
+  box-shadow: var(--shadow-sm);
+}
+.card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20rpx;
+  padding-bottom: 16rpx;
+  border-bottom: 1rpx solid var(--light-gray);
+}
+.card-name { font-size: 30rpx; font-weight: 700; color: #1F2937; }
+.card-badges { display: flex; gap: 10rpx; align-items: center; }
+.card-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24rpx;
+  font-weight: 600;
+  padding: 8rpx 20rpx;
+  border-radius: var(--radius-full);
+}
+.card-exp-tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24rpx;
+  font-weight: 600;
+  padding: 8rpx 20rpx;
+  border-radius: var(--radius-full);
+  background: #F3F4F6;
+  color: #6B7280;
+}
+.status-pending_confirm { background: var(--brand-soft-blue); color: var(--text-brand); }
+.status-confirmed { background: var(--green-bg); color: var(--status-green); }
+.status-visited { background: var(--gray-100); color: var(--text-secondary); }
+.status-in_experience { background: var(--brand-soft-blue); color: var(--text-brand); }
+.status-completed { background: var(--gray-100); color: var(--text-secondary); }
+.status-cancelled { background: var(--red-bg); color: var(--red-dark); }
+
+.card-row {
+  display: flex;
+  align-items: center;
+  padding: 10rpx 0;
+}
+.card-label { width: 80rpx; font-size: 24rpx; color: var(--mid-gray); flex-shrink: 0; }
+.card-value { font-size: 26rpx; color: var(--text-secondary); }
+
+.card-note {
+  margin-top: 12rpx;
+  padding: 16rpx;
+  background: #F9FAFB;
+  border-radius: 10rpx;
+  font-size: 24rpx;
+  color: #374151;
+  border: 1rpx solid #E5E7EB;
+}
+.note-tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #3B0764;
+  color: white;
+  font-size: 24rpx;
+  padding: 8rpx 20rpx;
+  border-radius: var(--radius-full);
+  margin-right: 8rpx;
+}
+
+/* 新预约状态 */
+.filter-item.urgent { color: #6B7280; font-weight: 600; }
+
+.card-channel-tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24rpx;
+  padding: 6rpx 12rpx;
+  border-radius: var(--radius-sm);
+  background: #F3F4F6;
+  color: #6B7280;
+}
+
+/* 确认预约快捷条 */
+.card-confirm-bar {
+  margin-top: 16rpx;
+  background: #3B0764;
+  border-radius: 10rpx;
+  padding: 16rpx;
+  text-align: center;
+}
+.confirm-btn-text {
+  color: white;
+  font-size: 26rpx;
+  font-weight: 600;
+}
+.card-reject-bar {
+  margin-top: 10rpx;
+  background: #FEE2E2;
+  border: 1rpx solid #FCA5A5;
+  border-radius: 10rpx;
+  padding: 16rpx;
+  text-align: center;
+}
+.reject-btn-text {
+  color: #B91C1C;
+  font-size: 26rpx;
+  font-weight: 600;
+}
+
+/* 模拟签到测试条 */
+.card-test-bar {
+  margin-top: 10rpx;
+  background: #F3F4F6;
+  border: 1rpx dashed #D1D5DB;
+  border-radius: 10rpx;
+  padding: 14rpx;
+  text-align: center;
+}
+.test-btn-text {
+  color: #6B7280;
+  font-size: 24rpx;
+}
+
+.card-rebook-bar {
+  margin-top: 10rpx;
+  background: #FEF3C7;
+  border: 1rpx solid #FCD34D;
+  border-radius: 10rpx;
+  padding: 14rpx;
+  text-align: center;
+}
+.rebook-btn-text {
+  color: #92400E;
+  font-size: 24rpx;
+  font-weight: 600;
+}

@@ -1,0 +1,184 @@
+<!-- ===== HERO ===== -->
+<view class="hero">
+  <view class="hero-status" style="height:{{statusBarHeight}}px"></view>
+  <image src="/images/hero_mj6.jpg" mode="aspectFill" class="hero-bg-img"></image>
+  <view class="hero-overlay"></view>
+  <view class="hero-text">
+    <text class="hero-title-1">冰美肌</text>
+    <text class="hero-title-2">第六代能量源</text>
+  </view>
+  <view class="hero-scroll" bindtap="scrollToBook">
+    <text>预约体验</text>
+    <view class="hero-arrow"></view>
+  </view>
+</view>
+
+<!-- ===== 首屏下方3模块 ===== -->
+<view class="feature-section">
+  <view class="feature-grid">
+    <view class="feature-card">
+      <view class="feature-icon">✓</view>
+      <view class="feature-title">无创无痛</view>
+    </view>
+    <view class="feature-card">
+      <view class="feature-icon">⚡</view>
+      <view class="feature-title">即刻见效</view>
+    </view>
+    <view class="feature-card">
+      <view class="feature-icon">🛡</view>
+      <view class="feature-title">安全可靠</view>
+    </view>
+  </view>
+</view>
+
+<!-- ===== 体验记录表单（灰色字段） ===== -->
+<view class="book-block" id="book">
+  <!-- 扫码来源徽章 -->
+  <view class="channel-badge-row" wx:if="{{channelBadge}}">
+    <view class="channel-badge">{{channelBadge}}</view>
+    <view class="trainer-badge" wx:if="{{trainerBadge}}">培训师：{{trainerBadge}}</view>
+  </view>
+
+  <view class="form-field">
+    <view class="field-label">姓名 <text class="required">*</text></view>
+    <input placeholder="您的称呼" value="{{name}}" bindinput="onName" placeholder-class="ph"/>
+  </view>
+
+  <view class="form-row">
+    <view class="form-field half">
+      <view class="field-label">性别 <text class="required">*</text></view>
+      <picker mode="selector" range="{{['男','女']}}" bindchange="onGender">
+        <view class="picker-value">{{['男','女'][genderIdx]}}</view>
+      </picker>
+    </view>
+    <view class="form-field half">
+      <view class="field-label">年龄</view>
+      <input placeholder="选填" value="{{age}}" bindinput="onAge" type="number" placeholder-class="ph"/>
+    </view>
+  </view>
+
+  <view class="form-field">
+    <view class="field-label">身份证号</view>
+    <input placeholder="选填，用于知情同意书实名认证" value="{{idCard}}" bindinput="onIdCard" maxlength="18" placeholder-class="ph"/>
+  </view>
+
+  <view class="form-row">
+    <view class="form-field half">
+      <view class="field-label">体验日期 <text class="required">*</text></view>
+      <picker mode="date" bindchange="onVisitDate">
+        <view class="picker-value {{visitDate ? '' : 'placeholder'}}">{{visitDate || '请选择日期'}}</view>
+      </picker>
+    </view>
+    <view class="form-field half">
+      <view class="field-label">时间段 <text class="required">*</text></view>
+      <picker mode="selector" range="{{timeSlots}}" bindchange="onVisitTime">
+        <view class="picker-value {{visitTimeText ? '' : 'placeholder'}}">{{visitTimeText || '请选择时间段'}}</view>
+      </picker>
+    </view>
+  </view>
+
+  <!-- 时段状态指示：closed=未开放(操作师未开启) / booked=已约满 / free=可约 -->
+  <view class="slot-status-list" wx:if="{{visitDate && allSlotStatus.length > 0}}">
+    <view class="slot-status-item {{allSlotStatus[index]}}" wx:for="{{allSlots}}" wx:key="*this" wx:for-index="index">
+      <text class="slot-status-time">{{item}}</text>
+      <text class="slot-status-tag">
+        {{allSlotStatus[index] === 'closed' ? '未开放' : (allSlotStatus[index] === 'booked' ? '已约满' : '可约')}}
+      </text>
+    </view>
+  </view>
+
+  <view class="form-field">
+    <view class="field-label">过往美容护理经历</view>
+    <textarea class="form-textarea" placeholder="如：光电类/注射类的频次，最近一次的美容项目及时间" value="{{medicalHistory}}" bindinput="onMedicalHistory" maxlength="500" placeholder-class="ph"/>
+  </view>
+
+  <view class="form-field">
+    <view class="field-label">重点改善需求</view>
+    <textarea class="form-textarea" placeholder="如：川字纹、法令纹、全脸紧致提升" value="{{needs}}" bindinput="onNeeds" maxlength="500" placeholder-class="ph"/>
+  </view>
+
+
+
+  <view class="form-field">
+    <view class="field-label">手机号 <text class="required">*</text></view>
+    <!-- 已授权状态 -->
+    <view wx:if="{{phoneVerified}}" class="phone-verified">
+      <text class="phone-number">{{phone}}</text>
+      <text class="phone-check">✓ 已授权</text>
+    </view>
+    <!-- 未授权 -->
+    <block wx:if="{{!phoneVerified}}">
+    <!-- 微信授权 — 全宽主按钮，权重最高 -->
+    <button class="method-auth-btn" open-type="getPhoneNumber" bindgetphonenumber="onGetPhoneNumber">
+      <text class="method-auth-icon">📱</text>
+      <text class="method-auth-main">微信授权手机号</text>
+      <text class="method-auth-hint">（推荐）</text>
+    </button>
+    </block>
+  </view>
+
+  <!-- 验证码弹窗 -->
+  <view class="verify-popup-mask" wx:if="{{showVerifyPopup}}" catchtouchmove="noop">
+    <view class="verify-popup">
+      <view class="verify-popup-title">输入验证码</view>
+      <view class="verify-popup-phone">已发送至 {{popupPhone}}</view>
+      <view class="verify-popup-input-row">
+        <input type="number" class="verify-popup-input" placeholder="6位验证码" value="{{popupCode}}" bindinput="onPopupCode" maxlength="6" focus="{{showVerifyPopup}}" placeholder-class="ph"/>
+      </view>
+      <view class="verify-popup-error" wx:if="{{popupError}}">{{popupError}}</view>
+      <!-- Mock 测试提示：真机测试时显示验证码 -->
+      <view class="verify-popup-mock" wx:if="{{_mockCodeHint}}">
+        测试验证码：{{_mockCodeHint}}
+      </view>
+      <view class="verify-popup-btns">
+        <button class="verify-popup-cancel" bindtap="onClosePopup">取消</button>
+        <button class="verify-popup-confirm" bindtap="onVerifyInPopup" disabled="{{popupCode.length < 6 || popupVerifying}}">
+          {{popupVerifying ? '验证中...' : '验证'}}
+        </button>
+      </view>
+    </view>
+  </view>
+
+  <!-- 隐私协议 -->
+  <view class="privacy-row">
+    <view class="privacy-check" bindtap="togglePrivacy">
+      <view class="checkbox {{agreedPrivacy ? 'checked' : ''}}">
+        <text wx:if="{{agreedPrivacy}}">✓</text>
+      </view>
+    </view>
+    <text class="privacy-text">我已阅读并同意</text>
+    <text class="privacy-link" bindtap="showPrivacy">《隐私政策》</text>
+    <text class="privacy-text">和</text>
+    <text class="privacy-link" bindtap="showAgreement">《用户协议》</text>
+  </view>
+
+  <button class="submit-btn" bindtap="submitBook">提交预约</button>
+</view>
+
+<view class="why-section">
+  <view class="sec-label">为什么选择冰美肌</view>
+  <view class="why-grid">
+    <view class="why-card">
+      <view class="why-card-icon">❄</view>
+      <view class="why-card-title">超频冰导</view>
+      <view class="why-card-desc">低温冰感，SPA级体验</view>
+    </view>
+    <view class="why-card">
+      <view class="why-card-icon">◈</view>
+      <view class="why-card-title">AI分区定能</view>
+      <view class="why-card-desc">动态精准，能量定制</view>
+    </view>
+    <view class="why-card">
+      <view class="why-card-icon">🌡</view>
+      <view class="why-card-title">智能温控系统</view>
+      <view class="why-card-desc">精准能量输出</view>
+    </view>
+    <view class="why-card">
+      <view class="why-card-icon">✓</view>
+      <view class="why-card-title">双码验真</view>
+      <view class="why-card-desc">一客一头，可溯源</view>
+    </view>
+  </view>
+</view>
+
+<view class="page-bottom"></view>

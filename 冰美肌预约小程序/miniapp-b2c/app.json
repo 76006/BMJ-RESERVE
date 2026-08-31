@@ -1,0 +1,48 @@
+{
+  "pages": [
+    "pages/index/index",
+    "pages/mine/mine",
+    "pages/consent/consent",
+    "pages/feedback/feedback",
+    "pages/admin/list/list",
+    "pages/admin/detail/detail",
+    "pages/admin/checkin/checkin",
+    "pages/admin/qrconfig/qrconfig",
+    "pages/dashboard/dashboard",
+    "pages/aftercare/aftercare",
+    "pages/legal/legal",
+    "pages/admin/schedule/schedule",
+    "pages/checkin/guest/guest",
+    "pages/admin/managers/managers",
+    "pages/admin/feedbacks/feedbacks",
+    "pages/admin/export/export",
+    "pages/admin/test/test"
+  ],
+  "window": {
+    "navigationBarBackgroundColor": "#6B7280",
+    "navigationBarTitleText": "",
+    "navigationBarTextStyle": "white",
+    "backgroundColor": "#F6F7F8"
+  },
+  "tabBar": {
+    "custom": true,
+    "color": "#9CA3AF",
+    "selectedColor": "#3B0764",
+    "backgroundColor": "#FFFFFF",
+    "borderStyle": "white",
+    "list": [
+      {
+        "pagePath": "pages/index/index",
+        "text": "首页"
+      },
+      {
+        "pagePath": "pages/mine/mine",
+        "text": "我的"
+      }
+    ]
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json",
+  "__usePrivacyCheck__": true,
+  "lazyCodeLoading": "requiredComponents"
+}

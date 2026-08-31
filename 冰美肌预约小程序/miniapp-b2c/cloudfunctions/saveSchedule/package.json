@@ -1,0 +1,9 @@
+{
+  "name": "saveSchedule",
+  "version": "1.0.0",
+  "description": "管理员保存时段开关（开放时段）到云端 schedule 集合",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3"
+  }
+}
