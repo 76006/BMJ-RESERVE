@@ -361,15 +361,18 @@ def check_known_bugs():
                     # 检查是否有对应文件
                     pass  # 不在报告里显示，作为信息保留
     
-    # Bug模式4: 状态选择弹窗中缺少 pending_confirm 选项
+    # Bug模式4: 状态流转必须按业务流程向前，不能从已确认退回待确认
     detail_js = read_file("pages/admin/detail/detail.js")
     detail_wxml = read_file("pages/admin/detail/detail.wxml")
-    if detail_js and detail_wxml:
-        status_options = re.findall(r"wx:for=\"\{\{\[([^\]]+)\]", detail_wxml)
-        if status_options:
-            opts = [o.strip("'\" ") for o in status_options[0].split(",")]
-            if "pending_confirm" not in opts:
-                results["known_bugs"].append("detail.wxml: 状态弹窗缺少 'pending_confirm' 选项，管理员无法将已确认改回待确认")
+    app_js = read_file("app.js")
+    booking_service = read_file("cloudfunctions/bookingService/index.js")
+    if detail_js and detail_wxml and app_js and booking_service:
+        if "statusOptions" not in detail_js or 'wx:for="{{statusOptions}}"' not in detail_wxml:
+            results["known_bugs"].append("detail: 状态选择器未使用受控的 statusOptions")
+        if "const STATUS_TRANSITIONS" not in app_js:
+            results["known_bugs"].append("app.js: 客户端缺少预约状态流转守卫")
+        if "function validStatusChange" not in booking_service:
+            results["known_bugs"].append("bookingService: 云端缺少预约状态流转守卫")
 
 # ============================================================
 # 主函数

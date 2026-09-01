@@ -30,6 +30,9 @@
   <view class="filter-item {{filterStatus === 'cancelled' ? 'active' : ''}}" data-status="cancelled" bindtap="setFilter">
     已取消 ({{statusCounts.cancelled || 0}})
   </view>
+  <view class="filter-item {{filterStatus === 'rejected' ? 'active' : ''}}" data-status="rejected" bindtap="setFilter">
+    已拒绝 ({{statusCounts.rejected || 0}})
+  </view>
 </scroll-view>
 
 <!-- ===== 预约列表 ===== -->
@@ -44,7 +47,7 @@
       <view class="card-name">{{item.name}} {{item.gender}} {{item.age}}岁</view>
       <view class="card-badges">
         <view class="card-status status-{{item._status}}">
-          {{item._status === 'pending_confirm' ? '新预约' : ''}}{{item._status === 'confirmed' ? '已预约' : ''}}{{item._status === 'visited' ? '已到店' : ''}}{{item._status === 'in_experience' ? '体验中' : ''}}{{item._status === 'completed' ? '已体验' : ''}}{{item._status === 'cancelled' ? '已取消' : ''}}
+          {{item._status === 'pending_confirm' ? '新预约' : ''}}{{item._status === 'confirmed' ? '已预约' : ''}}{{item._status === 'visited' ? '已到店' : ''}}{{item._status === 'in_experience' ? '体验中' : ''}}{{item._status === 'completed' ? '已体验' : ''}}{{item._status === 'cancelled' ? '已取消' : ''}}{{item._status === 'rejected' ? '已拒绝' : ''}}
         </view>
         <view wx:if="{{item.channel && item.channel !== 'direct'}}" class="card-channel-tag">{{item.channel === 'medical' ? '医疗' : '生美'}}</view>
         <view wx:if="{{item._immediateSatisfaction}}" class="card-exp-tag">已补录</view>

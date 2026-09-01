@@ -9,6 +9,7 @@ Page({
     age: '',
     idCard: '',
     visitDate: '',
+    minVisitDate: '',
     visitTimeIdx: -1,
     visitTimeText: '',
     timeSlots: TIME_SLOTS,
@@ -26,7 +27,7 @@ Page({
 
   onLoad() {
     const sys = wx.getSystemInfoSync()
-    this.setData({ statusBarHeight: sys.statusBarHeight })
+    this.setData({ statusBarHeight: sys.statusBarHeight, minVisitDate: this._fmtDate(new Date()) })
 
     // 隐私协议检查（微信 2023 年起要求，未同意则 getPhoneNumber 静默失败）
     if (wx.canIUse('getPrivacySetting')) {
@@ -61,6 +62,18 @@ Page({
     if (typeof this.getTabBar === 'function' && this.getTabBar()) {
       this.getTabBar().setData({ selected: 0 })
     }
+    const today = this._fmtDate(new Date())
+    if (this.data.visitDate && this.data.visitDate < today) {
+      this.setData({
+        visitDate: '',
+        visitTimeIdx: -1,
+        visitTimeText: '',
+        timeSlots: [],
+        slotStatus: [],
+        allSlotStatus: []
+      })
+    }
+    this.setData({ minVisitDate: today })
     // 暖启动：小程序已在后台时扫码只触发 onShow，需在这里也检查跳转
     this._checkCheckinRedirect()
   },
@@ -126,6 +139,11 @@ Page({
 
   onVisitDate(e) {
     const date = e.detail.value
+    const today = this._fmtDate(new Date())
+    if (!date || date < today) {
+      wx.showToast({ title: '不能选择今天以前的日期', icon: 'none' })
+      return
+    }
     this.setData({
       visitDate: date,
       visitTimeIdx: -1,
@@ -154,14 +172,15 @@ Page({
         // 构建完整三态列表（基于全部 TIME_SLOTS，关闭项也展示以提示用户）
         const fullSlots = TIME_SLOTS
         const fullStatus = fullSlots.map(s => {
+          if (!self._isFutureSlot(date, s)) return 'past'
           if (!openSet.has(s)) return 'closed'
           if (occupiedMap[s]) return 'booked'
           return 'free'
         })
 
-        // picker 仅放"开放"时段（closed 不入可选，避免用户误选）
-        const available = fullSlots.filter(s => openSet.has(s))
-        const availableStatus = fullStatus.filter(s => s !== 'closed')
+        // picker 只放仍未开始且未被占用的开放时段。
+        const available = fullSlots.filter((s, idx) => openSet.has(s) && fullStatus[idx] === 'free')
+        const availableStatus = available.map(s => fullStatus[fullSlots.indexOf(s)])
 
         if (available.length === 0) {
           self.setData({
@@ -193,6 +212,7 @@ Page({
     if (!name.trim()) return '请输入姓名'
     if (!visitDate) return '请选择体验日期'
     if (visitTimeIdx < 0) return '请选择体验时间段'
+    if (!this._isFutureSlot(visitDate, this.data.visitTimeText)) return '不能预约已经开始或过去的时段'
     if (!phoneVerified) return '请授权手机号'
     if (!agreedPrivacy) return '请先阅读并同意隐私协议'
     if (idCard && !/^\d{17}[\dXx]$/.test(idCard)) return '请输入正确的身份证号'
@@ -239,6 +259,12 @@ Page({
       data: { visitDate, visitTime: visitTimeText }
     }).then(res => {
       const r = res.result || {}
+      if (!r.success) {
+        wx.hideLoading()
+        this._submitting = false
+        wx.showToast({ title: r.error || '预约时间校验失败', icon: 'none' })
+        return
+      }
       if (r.success && r.occupied) {
         wx.hideLoading()
         this._submitting = false
@@ -250,9 +276,11 @@ Page({
       }
       // 直接提交（不再跳转知情同意书，签署移至签到环节）
       this.doSubmit()
-    }).catch(() => {
-      // 云函数不可用（如演示模式）→ 信任客户端判断，仍提交
-      this.doSubmit()
+    }).catch((err) => {
+      wx.hideLoading()
+      this._submitting = false
+      console.warn('[预约] 时段校验失败:', err)
+      wx.showToast({ title: '暂时无法校验时段，请稍后重试', icon: 'none' })
     })
   },
 
@@ -313,6 +341,31 @@ Page({
       medicalHistory: '', needs: '', phone: '',
       phoneVerified: false, agreedPrivacy: false
     })
+  },
+
+  _fmtDate(d) {
+    const pad = n => String(n).padStart(2, '0')
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+  },
+
+  _isFutureSlot(date, slot) {
+    if (!date || !slot) return false
+    const now = new Date()
+    const today = this._fmtDate(now)
+    if (date > today) return true
+    if (date < today) return false
+    const match = String(slot).match(/^(\d{1,2}):(\d{2})/)
+    if (!match) return false
+    const startAt = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate(),
+      Number(match[1]),
+      Number(match[2]),
+      0,
+      0
+    )
+    return startAt.getTime() >= now.getTime()
   },
 
   onShareAppMessage() {

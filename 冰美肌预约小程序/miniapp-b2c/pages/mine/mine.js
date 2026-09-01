@@ -4,7 +4,8 @@ const STATUS_CN = {
   visited: '已到店',
   in_experience: '体验中',
   completed: '已体验',
-  cancelled: '已取消'
+  cancelled: '已取消',
+  rejected: '预约失败'
 }
 
 Page({
@@ -41,6 +42,21 @@ Page({
       this.getTabBar().setData({ selected: 1 })
     }
     const app = getApp()
+    // 必须先确认当前微信 openId，再读取手机号、画像和预约缓存。
+    // 这样同一台手机切换微信号时不会短暂显示上一账号的数据。
+    if (!app.globalData.openId && !this._waitingIdentity) {
+      this._waitingIdentity = true
+      app.getOpenId((openid) => {
+        this._waitingIdentity = false
+        if (!openid) {
+          this.setData({ isAdmin: false, isLoggedIn: false, bookings: [] })
+          wx.showToast({ title: '身份识别失败，请稍后重试', icon: 'none' })
+          return
+        }
+        this.onShow()
+      })
+      return
+    }
     const sys = wx.getSystemInfoSync()
     const isDevtools = sys.platform === 'devtools' || /^Windows|Mac/.test(sys.system || '')
 
@@ -62,11 +78,15 @@ Page({
     const isAdmin = app.globalData.isAdmin || (isDevtools && wx.getStorageSync('_isAdmin'))
     const isLoggedIn = !!wx.getStorageSync('_phoneVerified')
 
+    // 从管理子页面返回时保留原视角；从其他 Tab 再进入“我的”时恢复实际角色。
+    const previewRole = this._preservePreviewRole ? this.data.previewRole : ''
+    this._preservePreviewRole = false
+
     this.setData({
       isAdmin: isAdmin,
       adminRole: app.globalData.adminRole || wx.getStorageSync('_adminRole') || '',
       adminName: app.globalData.adminName || wx.getStorageSync('_adminName') || '管理员',
-      previewRole: '',  // 每次进入页面重置
+      previewRole: previewRole,
       isLoggedIn: isLoggedIn,
       isDevtools: isDevtools
     })
@@ -83,14 +103,7 @@ Page({
     }
 
     // 计算体验次数和上次体验时间
-    const rawBookings = app.globalData.bookings || []
-    const myPhone = (app.getUserProfile() || {}).phone || wx.getStorageSync('_userPhone') || ''
-    const cleanPhone = (s) => (s || '').replace(/\*/g, '').trim()
-    const myBookings = rawBookings.filter(b => {
-      const bp = cleanPhone(b.phone)
-      const mp = cleanPhone(myPhone)
-      return bp && mp && bp.slice(-4) === mp.slice(-4)
-    })
+    const myBookings = app.getUserBookings ? app.getUserBookings() : []
     // 已体验/已完成的记录（含体验中）
     const doneBookings = myBookings.filter(b => b._status === 'visited' || b._status === 'in_experience' || b._status === 'completed')
     const visitCount = doneBookings.length
@@ -268,32 +281,40 @@ Page({
   // ===========================================
   // 管理员视图操作
   // ===========================================
+  _openAdminPage(url) {
+    this._preservePreviewRole = true
+    wx.navigateTo({
+      url,
+      fail: () => { this._preservePreviewRole = false }
+    })
+  },
+
   goAdminList() {
-    wx.navigateTo({ url: '/pages/admin/list/list' })
+    this._openAdminPage('/pages/admin/list/list')
   },
 
   goDashboard() {
-    wx.navigateTo({ url: '/pages/dashboard/dashboard' })
+    this._openAdminPage('/pages/dashboard/dashboard')
   },
 
   goAdminSchedule() {
-    wx.navigateTo({ url: '/pages/admin/schedule/schedule' })
+    this._openAdminPage('/pages/admin/schedule/schedule')
   },
 
   goFeedbacksAdmin() {
-    wx.navigateTo({ url: '/pages/admin/feedbacks/feedbacks' })
+    this._openAdminPage('/pages/admin/feedbacks/feedbacks')
   },
 
   goExport() {
-    wx.navigateTo({ url: '/pages/admin/export/export' })
+    this._openAdminPage('/pages/admin/export/export')
   },
 
   goQrcodeConfig() {
-    wx.navigateTo({ url: '/pages/admin/qrconfig/qrconfig' })
+    this._openAdminPage('/pages/admin/qrconfig/qrconfig')
   },
 
   goStaffManage() {
-    wx.navigateTo({ url: '/pages/admin/managers/managers' })
+    this._openAdminPage('/pages/admin/managers/managers')
   },
 
   // ===========================================

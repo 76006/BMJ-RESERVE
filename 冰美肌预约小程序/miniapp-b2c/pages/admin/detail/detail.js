@@ -6,6 +6,7 @@ Page({
     isEditingFollowUp: false,
     newFollowUp: '',
     showStatusPicker: false,
+    statusOptions: [],
     showCancelModal: false,
     cancelReason: '',
     isEditingStaff: false,
@@ -13,6 +14,8 @@ Page({
     scoreRange: [1, 2, 3, 4, 5],
     // 二维码
     showQRModal: false,
+    qrCodeUrl: '',
+    qrCodeFileID: '',
     qrSize: 240
   },
 
@@ -59,8 +62,27 @@ Page({
       ...r,
       dateDisplay: this._fmtTime(r.date)
     }))
-    this.setData({ booking, editNote: booking._adminNote || '' })
+    this.setData({
+      booking,
+      editNote: booking._adminNote || '',
+      statusOptions: this._getStatusOptions(booking._status)
+    })
     this.loadFeedback()
+  },
+
+  _getStatusOptions(status) {
+    const options = {
+      // 新预约使用“确认/拒绝”专用按钮，确保通知和操作记录完整。
+      pending_confirm: [],
+      // 已预约只能取消；到店状态必须由签到流程产生。
+      confirmed: ['cancelled'],
+      visited: ['in_experience'],
+      in_experience: ['completed'],
+      completed: [],
+      cancelled: [],
+      rejected: []
+    }
+    return options[status] || []
   },
 
   loadFeedback() {
@@ -115,7 +137,13 @@ Page({
   },
 
   // ===== 状态操作 =====
-  openStatusPicker() { this.setData({ showStatusPicker: true }) },
+  openStatusPicker() {
+    if (!this.data.statusOptions.length) {
+      wx.showToast({ title: '请使用当前页面的流程按钮操作', icon: 'none' })
+      return
+    }
+    this.setData({ showStatusPicker: true })
+  },
   closeStatusPicker() { this.setData({ showStatusPicker: false }) },
 
   changeStatus(e) {
@@ -126,8 +154,14 @@ Page({
       return
     }
     const app = getApp()
-    app.updateBookingStatus(this.data.booking.id, key)
-    this.setData({ booking: app.getBookingById(this.data.booking.id), showStatusPicker: false })
+    const ok = app.updateBookingStatus(this.data.booking.id, key)
+    if (!ok) {
+      wx.showToast({ title: '不允许跳过或回退状态', icon: 'none' })
+      this.setData({ showStatusPicker: false })
+      return
+    }
+    this._refreshBooking()
+    this.setData({ showStatusPicker: false })
   },
 
   onCancelReasonInput(e) { this.setData({ cancelReason: e.detail.value }) },
@@ -481,31 +515,45 @@ Page({
   genQRCode() {
     const booking = this.data.booking
     if (!booking) return
-
-    const QRCode = require('../../../utils/qrcode')
+    let envVersion = 'release'
     try {
-      // QR 库使用 ALNUM 字符集，booking.id 含小写字母会报错；转大写生成，扫描后转回小写匹配
-      const result = QRCode.generate('ID-' + booking.id.toUpperCase())
-      const matrix = result.matrix
-      const moduleCount = matrix.length
-      const qrSize = 240
-      const cellSize = Math.floor(qrSize / moduleCount)
+      const account = wx.getAccountInfoSync()
+      envVersion = account && account.miniProgram && account.miniProgram.envVersion
+        ? account.miniProgram.envVersion
+        : 'release'
+    } catch (e) { /* 使用正式版兜底 */ }
 
-      const qrRows = []
-      for (let r = 0; r < moduleCount; r++) {
-        qrRows.push(matrix[r].map(v => !!v))
+    wx.showLoading({ title: '生成签到码...', mask: true })
+    wx.cloud.callFunction({
+      name: 'genCheckinCode',
+      data: { bookingId: booking.id, envVersion },
+      timeout: 20000
+    }).then(res => {
+      wx.hideLoading()
+      const result = res.result || {}
+      if (!result.success || !result.codeUrl) {
+        wx.showModal({
+          title: '生成失败',
+          content: result.error || '未能生成签到码，请重试',
+          showCancel: false
+        })
+        return
       }
-
       this.setData({
         showQRModal: true,
-        qrRows: qrRows,
-        qrCellSize: cellSize,
-        qrSize: qrSize
+        qrCodeUrl: result.codeUrl,
+        qrCodeFileID: result.fileID || ''
       })
-    } catch (e) {
-      console.error('QR生成失败:', e)
-      wx.showToast({ title: '二维码生成失败', icon: 'none' })
-    }
+    }).catch(err => {
+      wx.hideLoading()
+      console.error('[签到码] 生成失败:', err)
+      wx.showToast({ title: '签到码生成失败，请重试', icon: 'none' })
+    })
+  },
+
+  previewQRCode() {
+    const url = this.data.qrCodeFileID || this.data.qrCodeUrl
+    if (url) wx.previewImage({ urls: [url] })
   },
 
   closeQRModal() {

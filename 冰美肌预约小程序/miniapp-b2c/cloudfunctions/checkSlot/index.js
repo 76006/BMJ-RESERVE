@@ -7,12 +7,27 @@ cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 const db = cloud.database()
 const _ = db.command
 
+function validateFutureTime(visitDate, visitTime) {
+  const dayEnd = Date.parse(visitDate + 'T23:59:59+08:00')
+  if (!Number.isFinite(dayEnd) || dayEnd < Date.now()) return '预约日期不能早于今天'
+  if (!visitTime) return ''
+  const match = visitTime.match(/^(\d{1,2}):(\d{2})-/)
+  if (!match) return '时间段格式不正确'
+  const startAt = Date.parse(visitDate + 'T' + match[1].padStart(2, '0') + ':' + match[2] + ':00+08:00')
+  if (!Number.isFinite(startAt) || startAt < Date.now()) return '不能预约已经开始或过去的时段'
+  return ''
+}
+
 exports.main = async (event) => {
   event = event || {}
   const visitDate = String(event.visitDate || '').trim()
   const visitTime = String(event.visitTime || '').trim()
   if (!/^\d{4}-\d{2}-\d{2}$/.test(visitDate)) {
     return { success: false, occupied: false, occupiedSlots: [], error: '日期格式不正确' }
+  }
+  const timeError = validateFutureTime(visitDate, visitTime)
+  if (timeError) {
+    return { success: false, occupied: false, occupiedSlots: [], error: timeError }
   }
 
   try {

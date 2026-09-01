@@ -65,7 +65,7 @@
   <view class="form-row">
     <view class="form-field half">
       <view class="field-label">体验日期 <text class="required">*</text></view>
-      <picker mode="date" bindchange="onVisitDate">
+      <picker mode="date" start="{{minVisitDate}}" bindchange="onVisitDate">
         <view class="picker-value {{visitDate ? '' : 'placeholder'}}">{{visitDate || '请选择日期'}}</view>
       </picker>
     </view>
@@ -82,7 +82,7 @@
     <view class="slot-status-item {{allSlotStatus[index]}}" wx:for="{{allSlots}}" wx:key="*this" wx:for-index="index">
       <text class="slot-status-time">{{item}}</text>
       <text class="slot-status-tag">
-        {{allSlotStatus[index] === 'closed' ? '未开放' : (allSlotStatus[index] === 'booked' ? '已约满' : '可约')}}
+        {{allSlotStatus[index] === 'past' ? '已过期' : (allSlotStatus[index] === 'closed' ? '未开放' : (allSlotStatus[index] === 'booked' ? '已约满' : '可约'))}}
       </text>
     </view>
   </view>

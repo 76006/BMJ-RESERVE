@@ -1,8 +1,8 @@
 <nav-bar title="时段管理" showBack="{{true}}"></nav-bar>
 <view class="page">
   <view class="action-bar">
+    <view class="save-btn" bindtap="saveSchedule">保存营业时段</view>
     <text class="action-hint">点击日期展开时段开关</text>
-    <view class="save-btn" bindtap="saveSchedule">保存</view>
   </view>
 
   <view class="hint">

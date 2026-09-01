@@ -18,10 +18,10 @@
       <text class="action-label">状态</text>
       <view class="action-value">
         <view class="status-badge status-{{booking._status}}">
-          {{booking._status === 'pending_confirm' ? '新预约' : ''}}{{booking._status === 'confirmed' ? '已预约' : ''}}{{booking._status === 'visited' ? '已到店' : ''}}{{booking._status === 'in_experience' ? '体验中' : ''}}{{booking._status === 'completed' ? '已体验' : ''}}{{booking._status === 'cancelled' ? '已取消' : ''}}
+          {{booking._status === 'pending_confirm' ? '新预约' : ''}}{{booking._status === 'confirmed' ? '已预约' : ''}}{{booking._status === 'visited' ? '已到店' : ''}}{{booking._status === 'in_experience' ? '体验中' : ''}}{{booking._status === 'completed' ? '已体验' : ''}}{{booking._status === 'cancelled' ? '已取消' : ''}}{{booking._status === 'rejected' ? '已拒绝' : ''}}
         </view>
       </view>
-      <text class="action-arrow">›</text>
+      <text class="action-arrow" wx:if="{{statusOptions.length}}">›</text>
     </view>
     <!-- 已到店状态：显示切体验中按钮 -->
     <view class="action-item" wx:if="{{booking._status === 'visited'}}">
@@ -478,9 +478,8 @@
 <view class="overlay" wx:if="{{showStatusPicker}}" bindtap="closeStatusPicker" catchtouchmove="stop"></view>
 <view class="picker" wx:if="{{showStatusPicker}}" catchtouchmove="stop">
   <view class="picker-title">选择状态</view>
-  <view class="picker-option" wx:for="{{booking._status === 'confirmed' ? ['pending_confirm','confirmed','visited','in_experience','completed','cancelled'] : ['pending_confirm','confirmed','visited','in_experience','completed']}}" wx:key="*this" bindtap="changeStatus" data-key="{{item}}">
-    <text>{{item === 'pending_confirm' ? '新预约' : ''}}{{item === 'confirmed' ? '已预约' : ''}}{{item === 'visited' ? '已到店' : ''}}{{item === 'in_experience' ? '体验中' : ''}}{{item === 'completed' ? '已体验' : ''}}{{item === 'cancelled' ? '已取消' : ''}}</text>
-    <text wx:if="{{booking._status === item}}">✓</text>
+  <view class="picker-option" wx:for="{{statusOptions}}" wx:key="*this" bindtap="changeStatus" data-key="{{item}}">
+    <text>{{item === 'visited' ? '已到店' : ''}}{{item === 'in_experience' ? '体验中' : ''}}{{item === 'completed' ? '已体验' : ''}}{{item === 'cancelled' ? '已取消' : ''}}</text>
   </view>
   <view class="picker-cancel" bindtap="closeStatusPicker">取消</view>
 </view>
@@ -504,15 +503,8 @@
 <view class="qr-modal" wx:if="{{showQRModal}}" catchtouchmove="stop">
   <view class="qr-modal-title">签到二维码</view>
   <view class="qr-modal-sub">顾客微信扫码即可自助签到</view>
-  <view class="qr-canvas-wrap">
-    <view class="qr-grid" style="width:{{qrSize}}px;height:{{qrSize}}px;">
-      <view wx:for="{{qrRows}}" wx:for-item="row" wx:key="r" class="qr-row" style="height:{{qrCellSize}}px;">
-        <view wx:for="{{row}}" wx:for-item="cell" wx:for-index="c" wx:key="c"
-              class="qr-cell {{cell ? 'cell-dark' : 'cell-light'}}"
-              style="width:{{qrCellSize}}px;height:{{qrCellSize}}px;">
-        </view>
-      </view>
-    </view>
+  <view class="qr-canvas-wrap" bindtap="previewQRCode">
+    <image class="qr-code-image" src="{{qrCodeFileID || qrCodeUrl}}" mode="aspectFit"></image>
   </view>
   <view class="qr-modal-info">
     <text class="qr-info-label">预约编号</text>
@@ -523,12 +515,10 @@
     <text class="qr-info-value">{{booking.name}} · {{booking.visitDate}}</text>
   </view>
   <view class="qr-modal-help">
-    开发工具内测：点击下方"模拟扫码签到"<br/>正式环境：顾客微信扫码上方二维码签到
+    顾客使用微信扫描上方小程序码，将直接进入本预约的知情同意书流程
   </view>
   <view class="qr-modal-actions">
     <button class="qr-modal-btn sim" bindtap="simCheckIn">模拟扫码签到</button>
     <button class="qr-modal-btn close" bindtap="closeQRModal">关闭</button>
   </view>
 </view>
-
-

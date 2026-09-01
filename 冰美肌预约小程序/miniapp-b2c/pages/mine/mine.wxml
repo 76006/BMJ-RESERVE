@@ -100,7 +100,7 @@
       <text class="shortcut-text">二维码配置</text>
       <text class="shortcut-arrow">›</text>
     </view>
-    <view class="shortcut-item" wx:if="{{adminRole === 'superadmin' && !previewRole}}" bindtap="goStaffManage">
+    <view class="shortcut-item" wx:if="{{adminRole === 'superadmin' && previewRole !== 'staff' && previewRole !== 'user'}}" bindtap="goStaffManage">
       <text class="shortcut-icon">👥</text>
       <text class="shortcut-text">人员管理</text>
       <text class="shortcut-arrow">›</text>
@@ -196,7 +196,7 @@
       <view class="booking-card" wx:for="{{bookings}}" wx:key="id" data-id="{{item.id}}" data-can-feedback="{{item.canFeedback}}" bindtap="goFeedback">
         <view class="booking-top">
           <view class="booking-id">#{{index + 1}}</view>
-          <view class="booking-status {{item.userStatus === '新预约' ? 'status-pending-confirm' : ''}} {{item.userStatus === '已预约' ? 'status-confirmed' : ''}} {{item.userStatus === '已到店' ? 'visited' : ''}} {{item.userStatus === '体验中' ? 'in-experience' : ''}} {{item.userStatus === '已体验' ? 'completed' : ''}} {{item.userStatus === '已取消' ? 'cancelled' : ''}}">{{item.userStatus}}</view>
+          <view class="booking-status {{item.userStatus === '新预约' ? 'status-pending-confirm' : ''}} {{item.userStatus === '已预约' ? 'status-confirmed' : ''}} {{item.userStatus === '已到店' ? 'visited' : ''}} {{item.userStatus === '体验中' ? 'in-experience' : ''}} {{item.userStatus === '已体验' ? 'completed' : ''}} {{item.userStatus === '已取消' ? 'cancelled' : ''}} {{item.userStatus === '预约失败' ? 'rejected' : ''}}">{{item.userStatus}}</view>
         </view>
         <view class="booking-confirm-hint" wx:if="{{item.userStatus === '新预约'}}">
           ⏳ 我们将在24小时内确认您的预约时间，请留意通知
@@ -228,6 +228,10 @@
           <view class="booking-action" data-id="{{item.id}}" catchtap="rebook">
             <text class="booking-tap-hint">重新预约 →</text>
           </view>
+        </view>
+        <!-- 已拒绝：显示门店填写的原因 -->
+        <view class="booking-footer" wx:elif="{{item.userStatus === '预约失败'}}">
+          <text class="booking-tap-hint dim">{{item._rejectReason ? '原因：' + item._rejectReason : '该预约未通过，请联系门店'}}</text>
         </view>
         <!-- 已到店/已体验：问卷 + 护理须知（体验后才触发） -->
         <view class="booking-footer" wx:elif="{{item._status === 'visited' || item._status === 'in_experience' || item._status === 'completed'}}">

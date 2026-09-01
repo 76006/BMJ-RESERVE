@@ -133,6 +133,7 @@
 .in-experience { background: var(--brand-soft-blue); color: var(--text-brand); }
 .completed { background: var(--gray-100); color: var(--text-secondary); }
 .cancelled { background: var(--red-bg); color: var(--red-dark); }
+.rejected { background: var(--red-bg); color: var(--red-dark); }
 .booking-body { display: flex; flex-direction: column; gap: 12rpx; }
 .booking-row { display: flex; align-items: flex-start; }
 .booking-label {
@@ -443,7 +444,7 @@
 /* 退出登录 */
 .logout-section {
   margin-top: 24rpx;
-  padding: 0 24rpx 32rpx;
+  padding: 0 24rpx calc(140rpx + env(safe-area-inset-bottom));
 }
 .logout-btn {
   text-align: center;

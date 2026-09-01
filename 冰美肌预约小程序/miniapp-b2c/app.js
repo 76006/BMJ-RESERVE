@@ -18,6 +18,30 @@ const STATUS_MAP = {
   rejected:        { user: '预约失败', admin: '已拒绝' }
 }
 
+// 预约状态只允许沿业务流程向前推进，避免后台任意跳转或回退。
+const STATUS_TRANSITIONS = {
+  pending_confirm: ['confirmed', 'rejected'],
+  confirmed: ['visited', 'in_experience', 'cancelled'],
+  visited: ['in_experience'],
+  in_experience: ['completed'],
+  completed: [],
+  cancelled: [],
+  rejected: []
+}
+
+function canTransitionStatus(booking, nextStatus) {
+  if (!booking || !nextStatus) return false
+  if (booking._status === nextStatus) return true
+  const allowed = STATUS_TRANSITIONS[booking._status] || []
+  if (allowed.indexOf(nextStatus) === -1) return false
+  // 到店/体验中只能由完成签到后的流程触发，不能在详情页直接改写。
+  if (booking._status === 'confirmed' &&
+      (nextStatus === 'visited' || nextStatus === 'in_experience')) {
+    return !!booking.checkInAt && !!booking.consentSignTime
+  }
+  return true
+}
+
 // 渠道标签
 const CHANNEL_MAP = {
   medical: '医疗渠道',
@@ -80,15 +104,20 @@ App({
     this.globalData._ = this.globalData.db.command
     console.log('[云开发] 初始化完成, env=cloudbase-d8gc0n57h3c535142')
 
-    // 自动初始化数据库集合（仅首次执行）
-    this._initCollections()
-
     // 读取扫码scene参数（小程序码带参进入）
     this._applyScanScene(options)
 
-    // 数据库集合初始化 + 加载预约记录（在 _initCollections 中触发）
-    // 管理员身份必须由云函数按当前 OPENID 重新确认，不能信任本地缓存
-    this._checkAdminByOpenId()
+    // 必须先确认当前微信身份，再读取任何本地缓存或预约数据。
+    // 同一部手机更换微信号时，这一步会清除上一账号遗留的资料与权限。
+    this.getOpenId((openid) => {
+      if (!openid) {
+        this.logoutAdmin()
+        this.globalData.bookings = []
+        console.warn('[身份隔离] 未取得当前微信身份，本次不读取本地用户数据')
+        return
+      }
+      this._checkAdminByOpenId(() => this._initCollections())
+    })
   },
 
   // 解析扫码参数并写入全局标记（冷启动 onLaunch 与 暖启动 onShow 共用）
@@ -571,7 +600,7 @@ App({
   // 管理员认证（服务端 OPENID 白名单）
   // ===========================================
   // 真机每次启动都由云函数重新确认；本地缓存只用于开发工具界面预览。
-  _checkAdminByOpenId() {
+  _checkAdminByOpenId(done) {
     const sys = wx.getSystemInfoSync()
     if (sys.platform === 'devtools' || /^Windows|Mac/.test(sys.system || '')) {
       if (wx.getStorageSync('_isAdmin')) {
@@ -579,6 +608,7 @@ App({
         this.globalData.adminName = wx.getStorageSync('_adminName') || '\u7ba1\u7406\u5458'
         this.globalData.adminRole = wx.getStorageSync('_adminRole') || 'staff'
       }
+      if (done) done()
       return
     }
     var self = this
@@ -592,9 +622,11 @@ App({
       } else {
         self.logoutAdmin()
       }
+      if (done) done()
     }).catch(function (err) {
       self.logoutAdmin()
       console.warn('[管理员] 云端身份校验失败:', err && err.message ? err.message : err)
+      if (done) done()
     })
   },
 
@@ -674,10 +706,18 @@ App({
   updateBookingStatus(bookingId, newStatus) {
     const booking = this._find(bookingId)
     if (!booking) return false
+    if (!canTransitionStatus(booking, newStatus)) {
+      console.warn('[状态流转] 已阻止非法变更:', booking._status, '→', newStatus)
+      return false
+    }
+    if (booking._status === newStatus) return true
     booking._status = newStatus
     booking.updatedAt = new Date().toISOString()
     this._saveLocal()
-    this._updateCloud(bookingId, { _status: newStatus, updatedAt: booking.updatedAt })
+    const cloudData = { _status: newStatus, updatedAt: booking.updatedAt }
+    if (booking.checkInAt) cloudData.checkInAt = booking.checkInAt
+    if (booking.consentSignTime) cloudData.consentSignTime = booking.consentSignTime
+    this._updateCloud(bookingId, cloudData)
     return true
   },
 
@@ -873,33 +913,67 @@ App({
   // ===========================================
   // 用户身份（openId）
   // ===========================================
+  _activateIdentity(openid) {
+    if (!openid) return
+    const previous = wx.getStorageSync('_activeOpenId') || ''
+    const isolationVersion = wx.getStorageSync('_identityIsolationVersion') || 0
+    const identityChanged = !!previous && previous !== openid
+    const needsMigration = isolationVersion < 1
+
+    if (identityChanged || needsMigration) {
+      wx.removeStorageSync('_phoneVerified')
+      wx.removeStorageSync('_userPhone')
+      wx.removeStorageSync('userProfile')
+      wx.removeStorageSync('bookings')
+      wx.removeStorageSync('feedbacks')
+      this.logoutAdmin()
+      this.globalData.bookings = []
+      this.globalData._cloudReady = false
+      console.log(identityChanged ? '[身份隔离] 检测到微信账号变化，已清除上一账号缓存' : '[身份隔离] 已完成本机缓存升级')
+    }
+
+    wx.setStorageSync('_activeOpenId', openid)
+    wx.setStorageSync('_identityIsolationVersion', 1)
+    this.globalData.openId = openid
+  },
+
   getOpenId(callback) {
+    const cb = typeof callback === 'function' ? callback : function () {}
     if (this.globalData.openId) {
-      callback(this.globalData.openId)
+      cb(this.globalData.openId)
       return
+    }
+    // 启动阶段多个页面可能同时请求身份，统一复用同一次云函数结果。
+    if (this._openIdLoading) {
+      this._openIdWaiters.push(cb)
+      return
+    }
+    this._openIdLoading = true
+    this._openIdWaiters = [cb]
+
+    const finish = (openid) => {
+      if (!this._openIdLoading) return
+      this._openIdLoading = false
+      const waiters = this._openIdWaiters || []
+      this._openIdWaiters = []
+      waiters.forEach(fn => fn(openid || ''))
     }
 
     // 开发工具/真机调试：直接返回 mock openId，避免云端调用超时影响调试
     const sys = wx.getSystemInfoSync()
     const isDevtools = sys.platform === 'devtools' || /^Windows|Mac/.test(sys.system || '')
     if (isDevtools) {
-      const mockOpenId = 'mock_openid_' + Date.now()
-      this.globalData.openId = mockOpenId
+      const mockOpenId = 'mock_openid_devtools'
+      this._activateIdentity(mockOpenId)
       console.log('[开发工具] 使用 mock openId:', mockOpenId)
-      callback(mockOpenId)
+      finish(mockOpenId)
       return
     }
 
-    let called = false
-    const safeCallback = (openid) => {
-      if (called) return
-      called = true
-      callback(openid || '')
-    }
     // 超时兜底：3秒后强制回调，避免主流程卡死
     const timer = setTimeout(() => {
       console.warn('[云开发] getOpenId 超时，使用空 openId 继续')
-      safeCallback('')
+      finish('')
     }, 3000)
 
     wx.cloud.callFunction({
@@ -908,15 +982,15 @@ App({
         clearTimeout(timer)
         const openid = res.result && res.result.openid
         if (openid) {
-          this.globalData.openId = openid
+          this._activateIdentity(openid)
           console.log('[云开发] 获取 openId 成功:', openid.substring(0, 10) + '...')
         }
-        safeCallback(openid || '')
+        finish(openid || '')
       },
       fail: (err) => {
         clearTimeout(timer)
         console.warn('[云开发] getOpenId 调用失败:', err)
-        safeCallback('')
+        finish('')
       }
     })
   },
@@ -944,17 +1018,24 @@ App({
 
     return (this.globalData.bookings || [])
       .filter(b => {
-        // 管理员可以看到所有记录
-        if (this.globalData.isAdmin) return true
-        // 有openId时按openId过滤
-        if (myOpenId && b._creatorOpenId) {
-          return b._creatorOpenId === myOpenId
+        // 用户视角始终只显示本人预约；管理员查看全部记录只能走管理页面。
+        if (myOpenId) {
+          const ownerOpenId = b._creatorOpenId || b._openid || ''
+          if (ownerOpenId) return ownerOpenId === myOpenId
+
+          // 兼容没有归属字段的旧记录，但必须完整手机号一致，禁止仅后4位匹配。
+          if (myPhone) {
+            const bp = cleanPhone(b.phone)
+            const mp = cleanPhone(myPhone)
+            return !!bp && bp === mp
+          }
+          return false
         }
-        // 无openId时按手机号后4位匹配（兼容旧数据/演示数据）
+        // 仅在无法获取openId的本地降级场景按完整手机号匹配。
         if (myPhone) {
           const bp = cleanPhone(b.phone)
           const mp = cleanPhone(myPhone)
-          if (bp.length >= 4 && mp.length >= 4 && bp.slice(-4) === mp.slice(-4)) return true
+          if (bp && bp === mp) return true
         }
         // 演示数据（无openId且本地模式）- 仅在云端未就绪时显示
         if (!this.globalData._cloudReady && !b._creatorOpenId) return true

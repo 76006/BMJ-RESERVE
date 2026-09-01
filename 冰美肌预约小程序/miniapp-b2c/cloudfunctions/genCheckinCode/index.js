@@ -14,6 +14,7 @@ async function isAdmin(openId) {
 }
 
 exports.main = async (event, context) => {
+  event = event || {}
   const openId = cloud.getWXContext().OPENID
   if (!(await isAdmin(openId))) {
     return { success: false, error: '无管理员权限' }
@@ -21,10 +22,29 @@ exports.main = async (event, context) => {
   console.log('[genCheckinCode] 管理员请求生成签到码')
 
   try {
+    const bookingId = String(event.bookingId || '').trim()
+    const envVersion = ['develop', 'trial', 'release'].includes(event.envVersion)
+      ? event.envVersion
+      : 'release'
+    if (bookingId && !/^[A-Za-z0-9_-]{1,24}$/.test(bookingId)) {
+      return { success: false, error: '预约编号格式不正确' }
+    }
+    if (bookingId) {
+      const bookingRes = await db.collection('bookings').where({ id: bookingId }).limit(1).get()
+      const booking = bookingRes.data && bookingRes.data[0]
+      if (!booking) return { success: false, error: '预约不存在' }
+      if (booking._status !== 'confirmed') {
+        return { success: false, error: '只有已确认的预约可以生成签到码' }
+      }
+    }
+
     // 调用微信获取无限制数量的小程序码
-    // 注意：不传 page 参数，默认进入小程序首页（app.js 检测 scene 后跳转签到页）
+    // 显式进入首页，由 app.js 解析 scene 后跳转签到页。
     const result = await cloud.openapi.wxacode.getUnlimited({
-      scene: 'checkin=true',
+      scene: bookingId ? 'id=' + bookingId : 'checkin=true',
+      page: 'pages/index/index',
+      checkPath: false,
+      envVersion,
       width: 430,
       autoColor: false,
       lineColor: { r: 59, g: 7, b: 100 },  // 主色 #3B0764
@@ -59,7 +79,8 @@ exports.main = async (event, context) => {
 
     // 上传到云存储
     const timestamp = Date.now()
-    const cloudPath = `checkin-code/checkin_${timestamp}.png`
+    const codeName = bookingId ? `booking_${bookingId}` : 'store'
+    const cloudPath = `checkin-code/${codeName}_${envVersion}_${timestamp}.png`
     console.log('[genCheckinCode] 上传到云存储:', cloudPath)
 
     const uploadResult = await cloud.uploadFile({
@@ -84,7 +105,9 @@ exports.main = async (event, context) => {
       success: true,
       codeUrl: tempUrl,
       fileID: uploadResult.fileID,
-      cloudPath
+      cloudPath,
+      bookingId,
+      envVersion
     }
   } catch (err) {
     console.error('[genCheckinCode] 异常:', err)

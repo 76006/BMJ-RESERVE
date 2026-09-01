@@ -98,6 +98,7 @@
 .status-in_experience { background: var(--brand-soft-blue); color: var(--text-brand); }
 .status-completed { background: var(--gray-100); color: var(--text-secondary); }
 .status-cancelled { background: var(--red-bg); color: var(--red-dark); }
+.status-rejected { background: var(--red-bg); color: var(--red-dark); }
 
 .card-row {
   display: flex;

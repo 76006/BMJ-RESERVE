@@ -73,6 +73,40 @@ async function listToday(openId, visitDate) {
   return { success: true, data }
 }
 
+function publicCheckinBooking(booking) {
+  return {
+    id: booking.id || '',
+    name: booking.name || '',
+    gender: booking.gender || '',
+    age: booking.age || '',
+    idCard: booking.idCard || '',
+    phone: booking.phone || '',
+    visitDate: booking.visitDate || '',
+    visitTime: booking.visitTime || '',
+    medicalHistory: booking.medicalHistory || '',
+    needs: booking.needs || '',
+    _status: booking._status || '',
+    checkInAt: booking.checkInAt || '',
+    createdAt: booking.createdAt || ''
+  }
+}
+
+async function getForCheckin(openId, bookingId) {
+  if (!bookingId) return { success: false, error: '缺少预约编号' }
+  const res = await db.collection('bookings').where({ id: bookingId }).limit(1).get()
+  const booking = res.data && res.data[0]
+  if (!booking) return { success: false, error: '未找到该预约' }
+
+  const phone = await getVerifiedPhone(openId)
+  const owner = booking._openid === openId || booking._creatorOpenId === openId
+  const phoneOwner = !!phone && phone === booking.phone
+  if (!owner && !phoneOwner) return { success: false, error: '该预约不属于当前微信账号' }
+  if (booking._status !== 'confirmed') return { success: false, error: '该预约当前不可签到' }
+  if (booking.checkInAt) return { success: false, error: '该预约已经完成签到' }
+
+  return { success: true, data: publicCheckinBooking(booking) }
+}
+
 function pickFields(input, allowed) {
   const output = {}
   Object.keys(input || {}).forEach(key => {
@@ -82,11 +116,25 @@ function pickFields(input, allowed) {
   return output
 }
 
-function validUserStatusChange(current, next) {
-  if (!next || next === current) return true
-  if (next === 'cancelled') return current === 'pending_confirm' || current === 'confirmed'
-  if (next === 'visited' || next === 'in_experience') return current === 'confirmed' || current === 'visited'
-  return false
+function validStatusChange(booking, next, pendingData) {
+  if (!next || next === booking._status) return true
+  const transitions = {
+    pending_confirm: ['confirmed', 'rejected'],
+    confirmed: ['visited', 'in_experience', 'cancelled'],
+    visited: ['in_experience'],
+    in_experience: ['completed'],
+    completed: [],
+    cancelled: [],
+    rejected: []
+  }
+  const allowed = transitions[booking._status] || []
+  if (allowed.indexOf(next) === -1) return false
+  if (booking._status === 'confirmed' && (next === 'visited' || next === 'in_experience')) {
+    const checkedIn = booking.checkInAt || (pendingData && pendingData.checkInAt)
+    const consentSigned = booking.consentSignTime || (pendingData && pendingData.consentSignTime)
+    return !!checkedIn && !!consentSigned
+  }
+  return true
 }
 
 async function updateBooking(openId, event) {
@@ -106,12 +154,13 @@ async function updateBooking(openId, event) {
     const phoneOwner = verifiedPhone && verifiedPhone === booking.phone
     if (!owner && !phoneOwner) return { success: false, error: '无权修改该预约' }
     data = pickFields(event.data, USER_FIELDS)
-    if (!validUserStatusChange(booking._status, data._status)) {
-      return { success: false, error: '不允许的预约状态变更' }
-    }
     if (data.phone && verifiedPhone && data.phone !== verifiedPhone) {
       return { success: false, error: '手机号必须与微信授权号码一致' }
     }
+  }
+
+  if (Object.prototype.hasOwnProperty.call(data, '_status') && !validStatusChange(booking, data._status, data)) {
+    return { success: false, error: `不允许从 ${booking._status} 变更为 ${data._status}` }
   }
 
   if (Object.keys(data).length <= 1) return { success: false, error: '没有可更新的字段' }
@@ -125,6 +174,7 @@ exports.main = async (event) => {
   if (!openId) return { success: false, error: '无法识别当前微信用户' }
   try {
     if (event.action === 'listToday') return await listToday(openId, event.visitDate)
+    if (event.action === 'getForCheckin') return await getForCheckin(openId, String(event.bookingId || '').trim())
     if (event.action === 'update') return await updateBooking(openId, event)
     return { success: false, error: '不支持的操作' }
   } catch (err) {

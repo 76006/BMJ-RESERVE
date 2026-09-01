@@ -43,19 +43,12 @@ Page({
     const today = this._fmtDate(new Date())
     this.setData({ today })
 
-    // 情况1：操作师后台传入 bookingId（直接查到记录）
+    // 情况1：预约专属小程序码传入 bookingId。
+    // 始终由云端校验该预约是否属于当前微信，避免本地缓存误认。
     if (options.id) {
-      // QR 码里 bookingId 转成了大写并加了 ID- 前缀，匹配时转回小写并去掉前缀
-      let bookingId = (options.id || '').trim().toLowerCase()
-      if (bookingId.indexOf('id-') === 0) {
-        bookingId = bookingId.slice(3)
-      }
-      const booking = app.getBookingById(bookingId)
-      if (booking) {
-        const merged = this._mergeCustomerData(booking)
-        this.setData({ step: 'confirm', booking: merged, bookingData: merged })
-        return
-      }
+      const bookingId = (options.id || '').trim()
+      this._resolveById(bookingId)
+      return
     }
 
     // 情况2：扫门店签到码，从 userProfile 自动匹配今日预约
@@ -73,6 +66,32 @@ Page({
 
     // 情况3：本地未匹配 → 云端按手机号查询今日未签到预约（兜底）
     this._resolveByCloud(profile && profile.phone ? profile.phone : '', today)
+  },
+
+  // 冷启动扫码时本地预约尚未加载，按预约编号从服务端安全读取本人预约。
+  _resolveById(bookingId) {
+    const app = getApp()
+    this.setData({ step: 'loading' })
+    wx.cloud.callFunction({
+      name: 'bookingService',
+      data: { action: 'getForCheckin', bookingId }
+    }).then(res => {
+      const result = res.result || {}
+      if (!result.success || !result.data) {
+        this.setData({ step: 'not_found', todayBookings: [] })
+        wx.showToast({ title: result.error || '未找到可签到预约', icon: 'none' })
+        return
+      }
+      const booking = result.data
+      const all = app.globalData.bookings || []
+      if (!all.some(item => item.id === booking.id)) all.unshift(booking)
+      app.globalData.bookings = all
+      const merged = this._mergeCustomerData(booking)
+      this.setData({ step: 'confirm', booking: merged, bookingData: merged })
+    }).catch(err => {
+      console.warn('[签到] 按预约编号查询失败:', err)
+      this.setData({ step: 'not_found', todayBookings: [] })
+    })
   },
 
   // 云端按"手机号 + 今日"查询未签到预约
@@ -141,7 +160,7 @@ Page({
     const phone = (currentBooking.phone || '').replace(/\*/g, '').trim()
 
     if (!phone) {
-      return {
+      return Object.assign({}, currentBooking, {
         name: currentBooking.name || '',
         gender: currentBooking.gender || '',
         age: currentBooking.age || '',
@@ -149,14 +168,14 @@ Page({
         phone: currentBooking.phone || '',
         visitDate: currentBooking.visitDate || '',
         visitTime: currentBooking.visitTime || ''
-      }
+      })
     }
 
     // 搜索所有历史上匹配此手机号的 booking（按时间倒序，最新的在前）
     const history = all
       .filter(b => {
         const bp = (b.phone || '').replace(/\*/g, '').trim()
-        return bp === phone || (bp.length >= 4 && phone.length >= 4 && bp.slice(-4) === phone.slice(-4))
+        return bp === phone
       })
       .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
 
@@ -169,7 +188,7 @@ Page({
       return ''
     }
 
-    return {
+    return Object.assign({}, currentBooking, {
       name: pick('name'),
       gender: pick('gender'),
       age: pick('age'),
@@ -177,7 +196,7 @@ Page({
       phone: phone,
       visitDate: currentBooking.visitDate || '',
       visitTime: currentBooking.visitTime || ''
-    }
+    })
   },
 
   // 自动匹配今日预约
@@ -191,7 +210,7 @@ Page({
       if (b.visitDate !== today) return false
       if (b.checkInAt) return false
       const bp = clean(b.phone)
-      return bp === p || (bp.length >= 4 && p.length >= 4 && bp.slice(-4) === p.slice(-4))
+      return bp === p
     })
 
     return matches.length > 0 ? matches[0] : null
@@ -304,6 +323,11 @@ Page({
     const app = getApp()
     const booking = this.data.booking
     if (!booking) { this._submitting = false; return }
+
+    // 冷启动时全量加载可能晚于扫码查询，签署前再次确保当前预约在本地模型中。
+    if (!app.getBookingById(booking.id)) {
+      app.globalData.bookings = [Object.assign({}, booking)].concat(app.globalData.bookings || [])
+    }
 
     // 写入知情同意书签署记录（含摄影授权）
     app.saveConsent(booking.id, {
