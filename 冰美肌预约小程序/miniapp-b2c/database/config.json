@@ -32,8 +32,8 @@
       ]
     },
     "sms_codes": {
-      "permission": "仅创建者可读写",
-      "reason": "短信验证码记录，sendSmsCode/verifySmsCode 全部走云函数，云函数绕过安全规则。前端无任何直接访问，设最严权限。",
+      "permission": "所有用户不可读写",
+      "reason": "短信验证码记录全部由 sendSmsCode/verifySmsCode 云函数访问，客户端无直接访问需求；禁止读取可避免验证码泄露。",
       "indexes": [
         { "name": "idx_phone", "fields": ["phone"], "description": "按手机号查询验证码" },
         { "name": "idx_phone_created", "fields": ["phone", "createdAt"], "description": "复合索引：手机号+创建时间（频率限制）" }
@@ -55,11 +55,8 @@
       "ALI_ACCESS_KEY": "阿里云 AccessKey ID",
       "ALI_SECRET_KEY": "阿里云 AccessKey Secret",
       "ALI_SMS_SIGN": "阿里云短信签名名称",
-      "ALI_SMS_TEMPLATE": "阿里云短信模板Code"
-    },
-    "verifySmsCode": {
-      "ALI_ACCESS_KEY": "阿里云 AccessKey ID（与sendSmsCode相同）",
-      "ALI_SECRET_KEY": "阿里云 AccessKey Secret（与sendSmsCode相同）"
+      "ALI_SMS_TEMPLATE": "阿里云短信模板Code",
+      "SMS_MOCK_ENABLED": "仅内测时设为 true；未配置正式短信服务时默认拒绝发送"
     },
     "manageAdmins": {
       "ADMIN_SECRET": "管理员操作密钥（替代代码中的硬编码值）"

@@ -1,17 +1,22 @@
 // 云函数：发送短信验证码
-// Mock模式：未配阿里云AK/SK时，验证码打印到控制台日志
-// 正式模式：配好AK/SK后调用阿里云「短信认证」API发送
+// Mock模式：仅在显式配置 SMS_MOCK_ENABLED=true 时启用
+// 正式模式：配好阿里云短信环境变量后调用「短信认证」API发送
 const cloud = require('wx-server-sdk')
+const crypto = require('crypto')
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 const db = cloud.database()
 
 // ========== 阿里云短信认证配置 ==========
 // 从云函数环境变量读取（在云开发控制台 → 云函数 → 环境变量 中配置）
-// 未配置时自动进入 Mock 模式（验证码打印到日志）
+// 未完整配置短信服务时默认拒绝发送，禁止自动降级到 Mock
 const ALI_ACCESS_KEY = process.env.ALI_ACCESS_KEY || ''
 const ALI_SECRET_KEY = process.env.ALI_SECRET_KEY || ''
 const ALI_SMS_SIGN = process.env.ALI_SMS_SIGN || ''
 const ALI_SMS_TEMPLATE = process.env.ALI_SMS_TEMPLATE || ''
+const SMS_MOCK_ENABLED = process.env.SMS_MOCK_ENABLED === 'true'
+const SMS_CONFIGURED = Boolean(
+  ALI_ACCESS_KEY && ALI_SECRET_KEY && ALI_SMS_SIGN && ALI_SMS_TEMPLATE
+)
 
 // ========== 验证码配置 ==========
 const CODE_LENGTH = 6
@@ -22,11 +27,8 @@ const RATE_LIMIT_SECONDS = 60         // 同一号码60秒内最多发一次
  * 生成指定长度的随机数字验证码
  */
 function generateCode(length) {
-  let code = ''
-  for (let i = 0; i < length; i++) {
-    code += Math.floor(Math.random() * 10)
-  }
-  return code
+  const upperBound = Math.pow(10, length)
+  return crypto.randomInt(0, upperBound).toString().padStart(length, '0')
 }
 
 /**
@@ -47,13 +49,13 @@ async function checkRateLimit(phone) {
  * 调用阿里云短信认证API发送验证码
  */
 async function sendViaAliyun(phone, code) {
-  if (!ALI_ACCESS_KEY || !ALI_SECRET_KEY || !ALI_SMS_SIGN || !ALI_SMS_TEMPLATE) {
-    // Mock模式：打印验证码到控制台，前端开发用
+  if (!SMS_CONFIGURED) {
+    // 只有显式开启测试开关时才允许打印验证码
     console.log('========================================')
     console.log('[Mock SMS] TO:', phone)
     console.log('[Mock SMS] CODE:', code)
     console.log('========================================')
-    return { success: true, mock: true, code: code }
+    return { success: true, mock: true }
   }
 
   // 正式模式：调用阿里云短信认证API
@@ -61,8 +63,6 @@ async function sendViaAliyun(phone, code) {
   // 签名方式：阿里云V3签名，region=cn-hangzhou
   // 文档：https://help.aliyun.com/zh/pnvs/developer-reference/api-dypnsapi-2017-05-25-sendsmsverifycode
   const https = require('https')
-  const crypto = require('crypto')
-
   const accessKeyId = ALI_ACCESS_KEY
   const accessKeySecret = ALI_SECRET_KEY
 
@@ -141,6 +141,11 @@ exports.main = async (event, context) => {
     return { success: false, error: '手机号格式不正确' }
   }
 
+  // 未配置正式短信服务时必须显式开启 Mock，避免生产环境静默放行
+  if (!SMS_CONFIGURED && !SMS_MOCK_ENABLED) {
+    return { success: false, error: '短信服务未配置' }
+  }
+
   // 2. 频率限制
   const limited = await checkRateLimit(phone)
   if (limited) {
@@ -160,6 +165,7 @@ exports.main = async (event, context) => {
         code: code,
         expiresAt: expiresAt,
         used: false,
+        mock: !SMS_CONFIGURED,
         createdAt: now
       }
     })
