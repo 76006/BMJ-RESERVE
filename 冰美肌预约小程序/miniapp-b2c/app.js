@@ -914,7 +914,6 @@ App({
     const myOpenId = this.globalData.openId || ''
     const profile = this.getUserProfile()
     const myPhone = profile ? profile.phone : ''
-    const currentStore = this.getStoreConfig()
     const cleanPhone = (s) => (s || '').replace(/\*/g, '').trim()
 
     const today = new Date().toISOString().slice(0, 10)
@@ -979,11 +978,6 @@ App({
           age: b.age,
           visitDate: b.visitDate,
           visitTime: b.visitTime || '',
-          storeName: b.storeName || currentStore.storeName || '',
-          storeAddress: b.storeAddress || currentStore.address || '',
-          storePhone: b.storePhone || currentStore.contactPhone || '',
-          storeWechat: b.storeWechat || currentStore.contactWechat || '',
-          storeBusinessHours: b.storeBusinessHours || currentStore.businessHours || '',
           medicalHistory: b.medicalHistory,
           needs: b.needs,
           createdAt: b.createdAt,
@@ -1004,7 +998,7 @@ App({
   // ===========================================
   exportCSV() {
     const headers = [
-      'ID', '姓名', '性别', '年龄', '身份证号', '体验日期', '时间段', '门店名称', '门店地址', '门店电话', '过往美容护理经历', '重点改善需求', '手机号',
+      'ID', '姓名', '性别', '年龄', '身份证号', '体验日期', '时间段', '过往美容护理经历', '重点改善需求', '手机号',
       '来源渠道', '培训师', '状态', '确认人', '签到时间', '设备型号',
       '客户负责人', '累计能量', '发数分配', '最高档位', '产品优化意见',
       'Day1回访', 'Day30回访', 'Day90回访',
@@ -1015,7 +1009,6 @@ App({
     const esc = v => { const s = String(v || ''); return s.includes(',') || s.includes('"') || s.includes('\n') ? '"' + s.replace(/"/g, '""') + '"' : s }
     const rows = this.globalData.bookings.map(b => [
       b.id, b.name, b.gender, b.age, b.idCard || '', b.visitDate, b.visitTime || '',
-      b.storeName || '', esc(b.storeAddress), b.storePhone || '',
       esc(b.medicalHistory), esc(b.needs), b.phone,
       channelLabel(b.channel), b.trainerName || '',
       statusLabel(b._status), b._confirmedBy || '', b.checkInAt || '', b.deviceModel || '',

@@ -42,7 +42,7 @@ Page({
   },
 
   copyAll() {
-    const headers = ['序号', '姓名', '性别', '年龄', '电话', '预约日期', '预约时间', '门店名称', '门店地址', '改善需求', '状态', '来源', '负责人', '内部备注', '提交时间']
+    const headers = ['序号', '姓名', '性别', '年龄', '电话', '预约日期', '预约时间', '改善需求', '状态', '来源', '负责人', '内部备注', '提交时间']
     const rows = this.data.rows.map((r, i) => [
       i + 1,
       r.name,
@@ -51,8 +51,6 @@ Page({
       r.phone,
       r.visitDate,
       r.visitTime,
-      r.storeName || '',
-      r.storeAddress || '',
       r.needs,
       r.statusLabel,
       r.channelLabel,
