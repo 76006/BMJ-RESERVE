@@ -76,6 +76,14 @@ App({
     channel: 'direct',   // 扫码进入时由scene参数覆盖: medical / beauty / direct
     trainerId: '',        // 扫码带入的培训师标识
     trainerName: '',      // 培训师展示名称
+    storeConfig: {
+      storeName: '冰美肌',
+      address: '',
+      contactPhone: '',
+      contactWechat: '',
+      businessHours: '',
+      appointmentNotice: '请提前10分钟到店，素颜更佳'
+    },
     db: null,             // 云开发数据库实例
     _: null,              // 云数据库 command
     _useCloud: true,      // 是否使用云数据库（默认开启）
@@ -158,6 +166,34 @@ App({
   _initCollections() {
     // 集合已在阶段0创建，不允许客户端启动时调用高权限初始化函数
     this._loadBookingsFromCloud()
+    this.loadStoreConfig()
+  },
+
+  // 读取唯一门店配置。统一从云函数读取，开发者工具调用失败时才使用本地预览。
+  loadStoreConfig(callback) {
+    const defaults = {
+      storeName: '冰美肌', address: '', contactPhone: '', contactWechat: '',
+      businessHours: '', appointmentNotice: '请提前10分钟到店，素颜更佳'
+    }
+    return wx.cloud.callFunction({
+      name: 'storeService',
+      data: { action: 'get' }
+    }).then(res => {
+      const result = res.result || {}
+      this.globalData.storeConfig = Object.assign({}, defaults, result.data || {})
+      if (callback) callback(this.globalData.storeConfig)
+      return this.globalData.storeConfig
+    }).catch(err => {
+      console.warn('[门店配置] 读取失败:', err && err.message ? err.message : err)
+      const local = wx.getStorageSync('_storeConfigPreview') || {}
+      this.globalData.storeConfig = Object.assign({}, defaults, local)
+      if (callback) callback(this.globalData.storeConfig)
+      return this.globalData.storeConfig
+    })
+  },
+
+  getStoreConfig() {
+    return this.globalData.storeConfig || {}
   },
 
   _loadBookingsFromCloud() {
@@ -878,6 +914,7 @@ App({
     const myOpenId = this.globalData.openId || ''
     const profile = this.getUserProfile()
     const myPhone = profile ? profile.phone : ''
+    const currentStore = this.getStoreConfig()
     const cleanPhone = (s) => (s || '').replace(/\*/g, '').trim()
 
     const today = new Date().toISOString().slice(0, 10)
@@ -942,6 +979,11 @@ App({
           age: b.age,
           visitDate: b.visitDate,
           visitTime: b.visitTime || '',
+          storeName: b.storeName || currentStore.storeName || '',
+          storeAddress: b.storeAddress || currentStore.address || '',
+          storePhone: b.storePhone || currentStore.contactPhone || '',
+          storeWechat: b.storeWechat || currentStore.contactWechat || '',
+          storeBusinessHours: b.storeBusinessHours || currentStore.businessHours || '',
           medicalHistory: b.medicalHistory,
           needs: b.needs,
           createdAt: b.createdAt,
@@ -962,7 +1004,7 @@ App({
   // ===========================================
   exportCSV() {
     const headers = [
-      'ID', '姓名', '性别', '年龄', '身份证号', '体验日期', '时间段', '过往美容护理经历', '重点改善需求', '手机号',
+      'ID', '姓名', '性别', '年龄', '身份证号', '体验日期', '时间段', '门店名称', '门店地址', '门店电话', '过往美容护理经历', '重点改善需求', '手机号',
       '来源渠道', '培训师', '状态', '确认人', '签到时间', '设备型号',
       '客户负责人', '累计能量', '发数分配', '最高档位', '产品优化意见',
       'Day1回访', 'Day30回访', 'Day90回访',
@@ -973,6 +1015,7 @@ App({
     const esc = v => { const s = String(v || ''); return s.includes(',') || s.includes('"') || s.includes('\n') ? '"' + s.replace(/"/g, '""') + '"' : s }
     const rows = this.globalData.bookings.map(b => [
       b.id, b.name, b.gender, b.age, b.idCard || '', b.visitDate, b.visitTime || '',
+      b.storeName || '', esc(b.storeAddress), b.storePhone || '',
       esc(b.medicalHistory), esc(b.needs), b.phone,
       channelLabel(b.channel), b.trainerName || '',
       statusLabel(b._status), b._confirmedBy || '', b.checkInAt || '', b.deviceModel || '',

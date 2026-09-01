@@ -81,7 +81,31 @@ function businessError(code, message) {
 function isMissingDocumentError(err) {
   const message = String((err && (err.errMsg || err.message)) || '').toLowerCase()
   return message.includes('not exist') || message.includes('not found') ||
-    message.includes('document_not_found') || message.includes('-502001')
+    message.includes('not_exist') || message.includes('document_not_found') || message.includes('-502001')
+}
+
+async function getCurrentStoreConfig() {
+  try {
+    const res = await db.collection('store_config').doc('current').get()
+    const doc = (res && res.data) || {}
+    return {
+      storeName: cleanText(doc.storeName || '冰美肌', 40),
+      storeAddress: cleanText(doc.address, 120),
+      storePhone: cleanText(doc.contactPhone, 30),
+      storeWechat: cleanText(doc.contactWechat, 50),
+      storeBusinessHours: cleanText(doc.businessHours, 80),
+      storeAppointmentNotice: cleanText(doc.appointmentNotice || '请提前10分钟到店，素颜更佳', 80)
+    }
+  } catch (err) {
+    // 兼容首次部署、尚未创建门店配置文档的情况。
+    if (isMissingDocumentError(err)) {
+      return {
+        storeName: '冰美肌', storeAddress: '', storePhone: '', storeWechat: '',
+        storeBusinessHours: '', storeAppointmentNotice: '请提前10分钟到店，素颜更佳'
+      }
+    }
+    throw err
+  }
 }
 
 async function resolveBookingOwner(openId, phone, admin) {
@@ -138,6 +162,7 @@ async function createBooking(openId, event) {
   }
 
   const ownerOpenId = await resolveBookingOwner(openId, phone, admin)
+  const store = await getCurrentStoreConfig()
   const bookingId = Date.now().toString(36) + crypto.randomBytes(3).toString('hex')
   const bookingDocId = 'booking_' + bookingId
   const lockId = slotLockId(visitDate, visitTime)
@@ -157,6 +182,12 @@ async function createBooking(openId, event) {
     channel,
     trainerId: cleanText(input.trainerId, 80),
     trainerName: cleanText(input.trainerName, 80),
+    storeName: store.storeName,
+    storeAddress: store.storeAddress,
+    storePhone: store.storePhone,
+    storeWechat: store.storeWechat,
+    storeBusinessHours: store.storeBusinessHours,
+    storeAppointmentNotice: store.storeAppointmentNotice,
     consentSignName: '',
     consentSignTime: '',
     consentSignImage: '',
@@ -278,6 +309,12 @@ function publicCheckinBooking(booking) {
     phone: booking.phone || '',
     visitDate: booking.visitDate || '',
     visitTime: booking.visitTime || '',
+    storeName: booking.storeName || '',
+    storeAddress: booking.storeAddress || '',
+    storePhone: booking.storePhone || '',
+    storeWechat: booking.storeWechat || '',
+    storeBusinessHours: booking.storeBusinessHours || '',
+    storeAppointmentNotice: booking.storeAppointmentNotice || '',
     medicalHistory: booking.medicalHistory || '',
     needs: booking.needs || '',
     _status: booking._status || '',

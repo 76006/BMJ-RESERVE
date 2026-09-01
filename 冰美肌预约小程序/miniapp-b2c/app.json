@@ -12,6 +12,7 @@
     "pages/aftercare/aftercare",
     "pages/legal/legal",
     "pages/admin/schedule/schedule",
+    "pages/admin/store/store",
     "pages/checkin/guest/guest",
     "pages/admin/managers/managers",
     "pages/admin/feedbacks/feedbacks",

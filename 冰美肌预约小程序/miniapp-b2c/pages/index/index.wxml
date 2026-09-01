@@ -39,6 +39,20 @@
     <view class="trainer-badge" wx:if="{{trainerBadge}}">培训师：{{trainerBadge}}</view>
   </view>
 
+  <view class="store-card">
+    <view class="store-card-head">
+      <text class="store-pin">📍</text>
+      <text class="store-name">{{storeName}}</text>
+    </view>
+    <view class="store-line" wx:if="{{storeAddress}}">地址：{{storeAddress}}</view>
+    <view class="store-line muted" wx:else>门店地址待配置，预约确认后工作人员会与您联系</view>
+    <view class="store-line" wx:if="{{storeBusinessHours}}">营业时间：{{storeBusinessHours}}</view>
+    <view class="store-contact" wx:if="{{storePhone || storeWechat}}">
+      <text wx:if="{{storePhone}}">电话：{{storePhone}}</text>
+      <text wx:if="{{storeWechat}}">微信：{{storeWechat}}</text>
+    </view>
+  </view>
+
   <view class="form-field">
     <view class="field-label">姓名 <text class="required">*</text></view>
     <input placeholder="您的称呼" value="{{name}}" bindinput="onName" placeholder-class="ph"/>

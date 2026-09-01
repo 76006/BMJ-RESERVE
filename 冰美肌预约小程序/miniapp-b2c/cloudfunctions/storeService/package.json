@@ -1,0 +1,9 @@
+{
+  "name": "storeService",
+  "version": "1.0.0",
+  "description": "统一门店信息读取与维护",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "3.0.1"
+  }
+}

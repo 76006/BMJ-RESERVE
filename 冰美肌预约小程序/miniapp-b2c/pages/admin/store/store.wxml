@@ -1,0 +1,48 @@
+<nav-bar title="门店信息" showBack="{{true}}"></nav-bar>
+
+<view class="page">
+  <view class="intro-card">
+    <view class="intro-title">统一门店配置</view>
+    <view class="intro-text">这里保存的内容会展示给顾客，并用于新预约和预约确认通知。操作师与管理员均可修改。</view>
+  </view>
+
+  <view class="form-card" wx:if="{{!loading}}">
+    <view class="field">
+      <view class="label">门店名称 <text>*</text></view>
+      <input value="{{storeName}}" data-field="storeName" bindinput="onInput" maxlength="40" placeholder="例如：冰美肌体验中心" />
+    </view>
+
+    <view class="field">
+      <view class="label">详细地址 <text>*</text></view>
+      <textarea value="{{address}}" data-field="address" bindinput="onInput" maxlength="120" placeholder="请填写省市区、道路、门牌号和楼层" />
+    </view>
+
+    <view class="field">
+      <view class="label">联系电话 <text>*</text></view>
+      <input value="{{contactPhone}}" data-field="contactPhone" bindinput="onInput" maxlength="30" type="text" placeholder="手机或固定电话" />
+    </view>
+
+    <view class="field">
+      <view class="label">客服微信</view>
+      <input value="{{contactWechat}}" data-field="contactWechat" bindinput="onInput" maxlength="50" placeholder="选填" />
+    </view>
+
+    <view class="field">
+      <view class="label">营业时间</view>
+      <input value="{{businessHours}}" data-field="businessHours" bindinput="onInput" maxlength="80" placeholder="例如：周一至周日 09:30-17:30" />
+    </view>
+
+    <view class="field">
+      <view class="label">预约注意事项</view>
+      <textarea value="{{appointmentNotice}}" data-field="appointmentNotice" bindinput="onInput" maxlength="80" placeholder="例如：请提前10分钟到店，素颜更佳" />
+    </view>
+
+    <button class="save-btn" loading="{{saving}}" disabled="{{saving}}" bindtap="saveConfig">
+      {{saving ? '保存中...' : '保存门店信息'}}
+    </button>
+    <view class="save-hint" wx:if="{{isDevtools}}">开发者工具会优先同步云端；当前微信无业务管理员权限时，仅保存本地预览。</view>
+    <view class="updated" wx:if="{{updatedAtText}}">最近更新：{{updatedAtText}}</view>
+  </view>
+
+  <view class="loading" wx:else>正在读取门店信息...</view>
+</view>

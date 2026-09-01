@@ -90,6 +90,11 @@
       <text class="shortcut-text">时段管理</text>
       <text class="shortcut-arrow">›</text>
     </view>
+    <view class="shortcut-item" bindtap="goStoreConfig">
+      <text class="shortcut-icon">📍</text>
+      <text class="shortcut-text">门店信息</text>
+      <text class="shortcut-arrow">›</text>
+    </view>
     <view class="shortcut-item" bindtap="goFeedbacksAdmin">
       <text class="shortcut-icon">📝</text>
       <text class="shortcut-text">回访问卷管理</text>
@@ -208,6 +213,10 @@
           <view class="booking-row">
             <text class="booking-label">预约时间</text>
             <text class="booking-value">{{item.visitDate}} {{item.visitTime}}</text>
+          </view>
+          <view class="booking-row" wx:if="{{item.storeName || item.storeAddress}}">
+            <text class="booking-label">预约门店</text>
+            <text class="booking-value">{{item.storeName}}{{item.storeAddress ? ' · ' + item.storeAddress : ''}}</text>
           </view>
           <view class="booking-row" wx:if="{{item.needs}}">
             <text class="booking-label">改善需求</text>

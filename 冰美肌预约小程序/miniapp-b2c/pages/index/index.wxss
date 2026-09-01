@@ -243,6 +243,20 @@
   color: var(--gray-500);
 }
 
+.store-card {
+  margin-bottom: 26rpx;
+  padding: 22rpx 24rpx;
+  border-radius: 16rpx;
+  background: #F5F3FF;
+  border: 1rpx solid #DDD6FE;
+}
+.store-card-head { display: flex; align-items: center; gap: 10rpx; margin-bottom: 10rpx; }
+.store-pin { font-size: 28rpx; }
+.store-name { font-size: 29rpx; font-weight: 700; color: #3B0764; }
+.store-line { font-size: 24rpx; line-height: 1.6; color: #4B5563; }
+.store-line.muted { color: #9CA3AF; }
+.store-contact { display: flex; flex-wrap: wrap; gap: 22rpx; margin-top: 8rpx; font-size: 24rpx; color: #6D28D9; }
+
 .form-textarea {
   width: 100%;
   height: 160rpx;

@@ -298,6 +298,10 @@ Page({
     this._openAdminPage('/pages/admin/schedule/schedule')
   },
 
+  goStoreConfig() {
+    this._openAdminPage('/pages/admin/store/store')
+  },
+
   goFeedbacksAdmin() {
     this._openAdminPage('/pages/admin/feedbacks/feedbacks')
   },

@@ -97,6 +97,10 @@
       <text class="cell-label">手机号</text>
       <text class="cell-value">{{booking.phone}}</text>
     </view>
+    <view class="info-cell full" wx:if="{{booking.storeName || booking.storeAddress}}">
+      <text class="cell-label">预约门店</text>
+      <text class="cell-value">{{booking.storeName}}{{booking.storeAddress ? ' · ' + booking.storeAddress : ''}}</text>
+    </view>
     <view class="info-cell full" wx:if="{{booking.medicalHistory}}">
       <text class="cell-label">过往美容护理经历</text>
       <text class="cell-value">{{booking.medicalHistory}}</text>

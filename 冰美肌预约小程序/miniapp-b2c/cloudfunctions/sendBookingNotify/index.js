@@ -10,10 +10,6 @@ const TEMPLATE_ID = 'A09emeoi_5a_1s7UsMD7Twuj5cfYOC-Y1999bCtb-sI'
 // 顾客点击通知后跳转的小程序页面（必须是已存在的页面路径）
 const PAGE_PATH = '/pages/mine/mine'
 
-// 注意事项（thing3，≤20字）
-const NOTICE_TEXT = '请提前10分钟到店，素颜更佳'
-// 门店地址（thing4，≤20字）—— TODO: 替换为真实门店地址（超长会被微信拒绝发送）
-const STORE_ADDRESS = '冰美肌门店'
 // ================================
 
 const clip = (s, n) => {
@@ -31,11 +27,13 @@ function fmtArrival(b) {
   return t ? date + ' ' + t : date
 }
 
-function buildData(b, status) {
+function buildData(b, status, storeConfig) {
   const ok = status === 'confirmed'
+  const notice = b.storeAppointmentNotice || storeConfig.appointmentNotice || '请提前10分钟到店，素颜更佳'
+  const address = b.storeAddress || storeConfig.address || '请联系门店确认地址'
   return {
-    thing3:   { value: clip(NOTICE_TEXT, 20) },                 // 注意事项
-    thing4:   { value: clip(STORE_ADDRESS, 20) },               // 地址
+    thing3:   { value: clip(notice, 20) },                       // 注意事项
+    thing4:   { value: clip(address, 20) },                      // 地址
     time10:   { value: fmtArrival(b) },                         // 到店时间
     phrase11: { value: clip(ok ? '预约成功' : '预约失败', 5) }   // 预约状态
   }
@@ -72,7 +70,16 @@ exports.main = async (event) => {
     return { ok: false, error: 'booking not found: ' + bookingId }
   }
 
-  // 收件人：自助下单时为顾客 openId；操作师代下场景下该字段是操作师，属已知限制
+  let storeConfig = {}
+  try {
+    const storeRes = await db.collection('store_config').doc('current').get()
+    storeConfig = storeRes.data || {}
+  } catch (e) {
+    // 旧环境可能尚未建立门店配置，继续使用预约快照或安全兜底。
+    storeConfig = {}
+  }
+
+  // 收件人使用预约归属 OpenID；操作师代预约时会优先关联已验证手机号对应的顾客。
   const touser = b._openid || b._creatorOpenId
   if (!touser) {
     return { ok: false, error: 'booking missing recipient openid' }
@@ -83,7 +90,7 @@ exports.main = async (event) => {
       touser: touser,
       templateId: TEMPLATE_ID,
       page: PAGE_PATH,
-      data: buildData(b, status || 'confirmed')
+      data: buildData(b, status || 'confirmed', storeConfig)
     })
     return { ok: true }
   } catch (e) {

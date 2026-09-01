@@ -30,6 +30,8 @@
         <view class="th" style="width:220rpx">电话</view>
         <view class="th" style="width:220rpx">预约日期</view>
         <view class="th" style="width:160rpx">预约时间</view>
+        <view class="th" style="width:180rpx">门店名称</view>
+        <view class="th" style="width:360rpx">门店地址</view>
         <view class="th" style="width:220rpx">改善需求</view>
         <view class="th" style="width:160rpx">状态</view>
         <view class="th" style="width:160rpx">来源</view>
@@ -48,6 +50,8 @@
           <view class="td" style="width:220rpx">{{item.phone}}</view>
           <view class="td" style="width:220rpx">{{item.visitDate}}</view>
           <view class="td" style="width:160rpx">{{item.visitTime}}</view>
+          <view class="td" style="width:180rpx">{{item.storeName || '-'}}</view>
+          <view class="td" style="width:360rpx">{{item.storeAddress || '-'}}</view>
           <view class="td" style="width:220rpx">{{item.needs}}</view>
           <view class="td" style="width:160rpx">
             <view class="status-tag status-{{item._status}}">{{item.statusLabel}}</view>

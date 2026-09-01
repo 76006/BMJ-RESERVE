@@ -4,8 +4,9 @@
   "_important": "阶段2目标权限。必须先部署本次云函数，再按此文件调整控制台权限，避免管理功能短暂中断。",
   "collections": {
     "bookings": {
-      "permission": "仅创建者可读写",
-      "reason": "顾客创建预约并读取自己的记录；管理员全量读取走 getAdminBookings，跨用户更新及手机号预约签到走 bookingService，客户端不再需要读取或修改他人的记录。",
+      "permission": "自定义：仅本人可读，客户端不可写",
+      "rule": { "read": "doc._openid == auth.openid", "write": false },
+      "reason": "顾客只读取自己的记录；预约创建及全部修改统一通过 bookingService，管理员全量读取走 getAdminBookings。",
       "indexes": [
         { "name": "idx_openid", "fields": ["_openid"], "description": "按用户openId查询自己的预约" },
         { "name": "idx_status", "fields": ["_status"], "description": "按状态筛选预约列表" },
@@ -42,6 +43,16 @@
     "schedule": {
       "permission": "所有用户可读",
       "reason": "顾客需要读取开放时段；保存操作仅通过带管理员身份校验的 saveSchedule 云函数完成。",
+      "indexes": []
+    },
+    "booking_slots": {
+      "permission": "所有用户不可读写",
+      "reason": "由 bookingService 在云端事务中维护时段锁，防止同一时段并发重复预约。",
+      "indexes": []
+    },
+    "store_config": {
+      "permission": "所有用户不可读写",
+      "reason": "唯一门店配置由 storeService 公开读取；仅 active 的操作师或管理员可通过云函数修改。",
       "indexes": []
     },
     "feedbacks": {

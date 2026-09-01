@@ -22,7 +22,12 @@ Page({
     phoneVerified: false,
     agreedPrivacy: false,
     channelBadge: '',
-    trainerBadge: ''
+    trainerBadge: '',
+    storeName: '冰美肌',
+    storeAddress: '',
+    storePhone: '',
+    storeWechat: '',
+    storeBusinessHours: ''
   },
 
   onLoad() {
@@ -53,6 +58,7 @@ Page({
         trainerBadge: app.globalData.trainerName || ''
       })
     }
+    app.loadStoreConfig(config => this._applyStoreConfig(config))
 
     // 门店签到码：检测到 checkin 标记 → 跳转顾客签到页（冷启动）
     this._checkCheckinRedirect()
@@ -74,9 +80,21 @@ Page({
       })
     }
     this.setData({ minVisitDate: today })
+    this._applyStoreConfig(getApp().getStoreConfig())
     // 暖启动：小程序已在后台时扫码只触发 onShow，需在这里也检查跳转
     const redirectingToCheckin = this._checkCheckinRedirect()
     if (!redirectingToCheckin) this._loadRebookDraft()
+  },
+
+  _applyStoreConfig(config) {
+    config = config || {}
+    this.setData({
+      storeName: config.storeName || '冰美肌',
+      storeAddress: config.address || '',
+      storePhone: config.contactPhone || '',
+      storeWechat: config.contactWechat || '',
+      storeBusinessHours: config.businessHours || ''
+    })
   },
 
   // 门店签到码扫描后跳转顾客签到页（onLoad 与 onShow 共用）

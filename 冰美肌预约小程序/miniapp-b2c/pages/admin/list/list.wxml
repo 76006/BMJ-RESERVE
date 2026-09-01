@@ -57,6 +57,10 @@
       <text class="card-label">体验时间</text>
       <text class="card-value">{{item.visitDate}} {{item.visitTime}}</text>
     </view>
+    <view class="card-row" wx:if="{{item.storeName || item.storeAddress}}">
+      <text class="card-label">预约门店</text>
+      <text class="card-value">{{item.storeName}}{{item.storeAddress ? ' · ' + item.storeAddress : ''}}</text>
+    </view>
     <view class="card-row">
       <text class="card-label">电话</text>
       <text class="card-value">{{item.phone}}</text>
