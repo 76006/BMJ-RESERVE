@@ -117,28 +117,6 @@
     </block>
   </view>
 
-  <!-- 验证码弹窗 -->
-  <view class="verify-popup-mask" wx:if="{{showVerifyPopup}}" catchtouchmove="noop">
-    <view class="verify-popup">
-      <view class="verify-popup-title">输入验证码</view>
-      <view class="verify-popup-phone">已发送至 {{popupPhone}}</view>
-      <view class="verify-popup-input-row">
-        <input type="number" class="verify-popup-input" placeholder="6位验证码" value="{{popupCode}}" bindinput="onPopupCode" maxlength="6" focus="{{showVerifyPopup}}" placeholder-class="ph"/>
-      </view>
-      <view class="verify-popup-error" wx:if="{{popupError}}">{{popupError}}</view>
-      <!-- Mock 测试提示：真机测试时显示验证码 -->
-      <view class="verify-popup-mock" wx:if="{{_mockCodeHint}}">
-        测试验证码：{{_mockCodeHint}}
-      </view>
-      <view class="verify-popup-btns">
-        <button class="verify-popup-cancel" bindtap="onClosePopup">取消</button>
-        <button class="verify-popup-confirm" bindtap="onVerifyInPopup" disabled="{{popupCode.length < 6 || popupVerifying}}">
-          {{popupVerifying ? '验证中...' : '验证'}}
-        </button>
-      </view>
-    </view>
-  </view>
-
   <!-- 隐私协议 -->
   <view class="privacy-row">
     <view class="privacy-check" bindtap="togglePrivacy">

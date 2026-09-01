@@ -19,20 +19,6 @@ Page({
     needs: '',
     phone: '',
     phoneVerified: false,
-    // 短信验证码（手动填写备选 → 弹窗输入）
-    smsCode: '',
-    codeSent: false,
-    codeCountdown: 0,
-    codeVerified: false,
-    verifying: false,
-    codeError: '',
-    _countdownTimer: null,
-    // 验证码弹窗
-    showVerifyPopup: false,
-    popupPhone: '',
-    popupCode: '',
-    popupError: '',
-    popupVerifying: false,
     agreedPrivacy: false,
     channelBadge: '',
     trainerBadge: ''
@@ -100,22 +86,6 @@ Page({
   onName(e) { this.setData({ name: e.detail.value }) },
   onAge(e) { this.setData({ age: e.detail.value }) },
   onIdCard(e) { this.setData({ idCard: e.detail.value }) },
-  onUnload() {
-    if (this.data._countdownTimer) {
-      clearInterval(this.data._countdownTimer)
-    }
-  },
-
-  onPhone(e) {
-    const phone = e.detail.value
-    this.setData({ phone: phone, phoneVerified: false })
-    // 手机号变更时重置验证状态
-    if (this.data.codeSent) {
-      this.setData({ codeSent: false, smsCode: '', codeVerified: false, codeError: '', codeCountdown: 0 })
-      if (this.data._countdownTimer) { clearInterval(this.data._countdownTimer) }
-    }
-  },
-
   // 微信手机号一键授权
   onGetPhoneNumber(e) {
     if (e.detail.errMsg !== 'getPhoneNumber:ok') {
@@ -132,11 +102,7 @@ Page({
       if (result.phone) {
         this.setData({
           phone: result.phone,
-          phoneVerified: true,
-          codeSent: false,
-          smsCode: '',
-          codeVerified: false,
-          codeError: ''
+          phoneVerified: true
         })
         wx.showToast({ title: '授权成功', icon: 'success' })
       } else {
@@ -150,82 +116,6 @@ Page({
     })
   },
 
-  // 发送验证码（内测Mock模式：本地生成 + 弹窗输入）
-  onSendCode() {
-    const phone = this.data.phone.trim()
-    if (!/^1\d{10}$/.test(phone)) {
-      wx.showToast({ title: '请输入正确的手机号', icon: 'none' })
-      return
-    }
-
-    // 生成6位随机验证码
-    const code = String(Math.floor(100000 + Math.random() * 900000))
-    this._mockCode = code
-    this._mockPhone = phone
-    this.setData({
-      codeSent: true,
-      codeVerified: false,
-      codeError: '',
-      // 打开弹窗
-      showVerifyPopup: true,
-      popupPhone: phone.replace(/(\d{3})\d{4}(\d{4})/, '$1****$2'),
-      popupCode: '',
-      popupError: '',
-      popupVerifying: false,
-      // Mock模式下在弹窗显示验证码，方便真机测试
-      _mockCodeHint: code
-    })
-
-    // 倒计时在背景启动
-    this._startCountdown()
-
-    // Mock：展示验证码（测试用）
-    console.log('[Mock SMS] 手机号:', phone, '验证码:', code)
-    wx.showToast({ title: '验证码已生成', icon: 'none', duration: 1500 })
-  },
-
-  _startCountdown() {
-    this.setData({ codeCountdown: 60 })
-    this.data._countdownTimer = setInterval(() => {
-      const n = this.data.codeCountdown - 1
-      if (n <= 0) {
-        clearInterval(this.data._countdownTimer)
-        this.setData({ codeCountdown: 0 })
-      } else {
-        this.setData({ codeCountdown: n })
-      }
-    }, 1000)
-  },
-
-  // 弹窗内输入验证码
-  onPopupCode(e) {
-    this.setData({ popupCode: e.detail.value, popupError: '' })
-  },
-
-  noop() {},
-
-  // 弹窗内验证
-  onVerifyInPopup() {
-    const { popupCode } = this.data
-    if (popupCode.length < 6) return
-    this.setData({ popupVerifying: true, popupError: '' })
-
-    if (popupCode.trim() === this._mockCode) {
-      this.setData({
-        popupVerifying: false,
-        codeVerified: true,
-        showVerifyPopup: false
-      })
-      wx.showToast({ title: '验证通过', icon: 'success' })
-    } else {
-      this.setData({ popupVerifying: false, popupError: '验证码错误，请重试' })
-    }
-  },
-
-  // 关闭弹窗
-  onClosePopup() {
-    this.setData({ showVerifyPopup: false })
-  },
   onMedicalHistory(e) { this.setData({ medicalHistory: e.detail.value }) },
   onNeeds(e) { this.setData({ needs: e.detail.value }) },
 
@@ -299,7 +189,7 @@ Page({
   },
 
   validate() {
-    const { name, visitDate, visitTimeIdx, phone, idCard, agreedPrivacy, phoneVerified, codeSent, codeVerified } = this.data
+    const { name, visitDate, visitTimeIdx, idCard, agreedPrivacy, phoneVerified } = this.data
     if (!name.trim()) return '请输入姓名'
     if (!visitDate) return '请选择体验日期'
     if (visitTimeIdx < 0) return '请选择体验时间段'
@@ -417,14 +307,11 @@ Page({
   },
 
   resetForm() {
-    if (this.data._countdownTimer) { clearInterval(this.data._countdownTimer) }
     this.setData({
       name: '', genderIdx: 0, genderText: '男', age: '', idCard: '',
       visitDate: '', visitTimeIdx: -1, visitTimeText: '',
       medicalHistory: '', needs: '', phone: '',
-      smsCode: '', codeSent: false, codeCountdown: 0, codeVerified: false, verifying: false, codeError: '',
-      phoneVerified: false, agreedPrivacy: false,
-      showVerifyPopup: false, popupPhone: '', popupCode: '', popupError: '', popupVerifying: false, _mockCodeHint: ''
+      phoneVerified: false, agreedPrivacy: false
     })
   },
 
