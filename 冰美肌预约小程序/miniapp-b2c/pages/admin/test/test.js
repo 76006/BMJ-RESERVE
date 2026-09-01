@@ -10,7 +10,7 @@ Page({
 
   onLoad() {
     const sys = wx.getSystemInfoSync()
-    const isDevtools = sys.platform === 'devtools' || /^Windows|Mac/.test(sys.system || '')
+    const isDevtools = sys.platform === 'devtools'
     if (!isDevtools) {
       wx.showModal({
         title: '页面不可用',

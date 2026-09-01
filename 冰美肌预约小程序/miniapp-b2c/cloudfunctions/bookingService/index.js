@@ -1,8 +1,9 @@
 /**
  * bookingService - 受控预约查询与更新
  *
- * listToday：仅返回当前微信本人/已验证手机号对应的当日预约。
- * update：管理员可更新业务字段；普通用户只能更新自己的预约或本人手机号预约。
+ * listToday：仅在有效签到码下返回当前微信本人/已验证手机号对应的当日预约。
+ * completeCheckin：校验签到码、预约归属和签署信息后，在事务中完成签到。
+ * update：管理员可更新业务字段；普通用户不能通过通用更新写入签到凭证或到店状态。
  */
 const cloud = require('wx-server-sdk')
 const crypto = require('crypto')
@@ -26,9 +27,7 @@ const ADMIN_FIELDS = new Set([
 ])
 
 const USER_FIELDS = new Set([
-  '_status', '_cancelReason', 'checkInAt', 'deviceModel',
-  'consentSignName', 'consentSignTime', 'consentSignImage',
-  'consentPhotoAuth1', 'consentPhotoAuth2',
+  '_status', '_cancelReason',
   'name', 'gender', 'age', 'idCard', 'phone',
   '_feedback24', '_feedback30', '_feedback90', 'updatedAt'
 ])
@@ -53,6 +52,54 @@ async function getVerifiedPhone(openId) {
 
 function cleanText(value, maxLength) {
   return String(value == null ? '' : value).trim().slice(0, maxLength)
+}
+
+function todayInChina() {
+  return new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10)
+}
+
+function hashCheckinToken(token) {
+  return crypto.createHash('sha256').update(String(token || ''), 'utf8').digest('hex')
+}
+
+function validTokenFormat(token) {
+  return /^[A-Za-z0-9_-]{8,64}$/.test(String(token || ''))
+}
+
+function hashMatches(expected, token) {
+  if (!expected || !validTokenFormat(token)) return false
+  const actual = hashCheckinToken(token)
+  const left = Buffer.from(String(expected), 'hex')
+  const right = Buffer.from(actual, 'hex')
+  return left.length === right.length && crypto.timingSafeEqual(left, right)
+}
+
+async function validateStoreCheckinToken(token) {
+  if (!validTokenFormat(token)) return false
+  try {
+    const res = await db.collection('store_config').doc('current').get()
+    const config = (res && res.data) || {}
+    return hashMatches(config.checkinQrTokenHash, token)
+  } catch (err) {
+    if (isMissingDocumentError(err)) return false
+    throw err
+  }
+}
+
+async function validateCheckinToken(booking, token) {
+  if (!validTokenFormat(token)) return false
+  if (hashMatches(booking && booking._checkinTokenHash, token)) {
+    const expiresAt = Date.parse(booking._checkinTokenExpiresAt || '')
+    return !Number.isFinite(expiresAt) || expiresAt >= Date.now()
+  }
+  return validateStoreCheckinToken(token)
+}
+
+async function getBookingAccess(openId, booking) {
+  const phone = await getVerifiedPhone(openId)
+  const owner = booking._openid === openId || booking._creatorOpenId === openId
+  const phoneOwner = !!phone && phone === booking.phone
+  return { phone, owner, phoneOwner, allowed: owner || phoneOwner }
 }
 
 function validateFutureTime(visitDate, visitTime) {
@@ -281,11 +328,17 @@ function mergeUnique(groups) {
   return Object.keys(map).map(key => map[key])
 }
 
-async function listToday(openId, visitDate) {
+async function listToday(openId, visitDate, checkinToken) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(visitDate || '')) {
     return { success: false, data: [], error: '日期格式不正确' }
   }
+  if (!(await validateStoreCheckinToken(checkinToken))) {
+    return { success: false, data: [], invalidCode: true, error: '签到码无效或已更新，请重新扫描门店签到码' }
+  }
   const phone = await getVerifiedPhone(openId)
+  if (!phone) {
+    return { success: false, data: [], requiresPhoneAuth: true, error: '请先授权预约手机号，以便识别您的预约' }
+  }
   const tasks = [
     db.collection('bookings').where({ _creatorOpenId: openId, visitDate }).limit(50).get(),
     db.collection('bookings').where({ _openid: openId, visitDate }).limit(50).get()
@@ -323,20 +376,125 @@ function publicCheckinBooking(booking) {
   }
 }
 
-async function getForCheckin(openId, bookingId) {
+async function getForCheckin(openId, bookingId, checkinToken) {
   if (!bookingId) return { success: false, error: '缺少预约编号' }
   const res = await db.collection('bookings').where({ id: bookingId }).limit(1).get()
   const booking = res.data && res.data[0]
   if (!booking) return { success: false, error: '未找到该预约' }
 
-  const phone = await getVerifiedPhone(openId)
-  const owner = booking._openid === openId || booking._creatorOpenId === openId
-  const phoneOwner = !!phone && phone === booking.phone
-  if (!owner && !phoneOwner) return { success: false, error: '该预约不属于当前微信账号' }
+  if (!(await validateCheckinToken(booking, checkinToken))) {
+    return { success: false, invalidCode: true, error: '签到码无效或已失效，请让工作人员重新生成' }
+  }
+  const access = await getBookingAccess(openId, booking)
+  if (!access.allowed && !access.phone) {
+    return { success: false, requiresPhoneAuth: true, error: '请先授权预约手机号，以便确认预约归属' }
+  }
+  if (!access.allowed) return { success: false, error: '该预约不属于当前微信账号' }
+  if (booking.visitDate !== todayInChina()) return { success: false, error: '只能在预约当天到店签到' }
   if (booking._status !== 'confirmed') return { success: false, error: '该预约当前不可签到' }
   if (booking.checkInAt) return { success: false, error: '该预约已经完成签到' }
 
+  // 操作师代下单时预约最初可能归属于操作师；顾客授权同一手机号后在这里安全绑定。
+  if (!access.owner && access.phoneOwner) {
+    await db.collection('bookings').doc(booking._id).update({
+      data: { _openid: openId, updatedAt: new Date().toISOString() }
+    })
+    booking._openid = openId
+  }
+
   return { success: true, data: publicCheckinBooking(booking) }
+}
+
+async function completeCheckin(openId, event) {
+  const bookingId = cleanText(event.bookingId, 40)
+  if (!bookingId) return { success: false, error: '缺少预约编号' }
+  if (event.consentAccepted !== true) return { success: false, error: '请先完整阅读并同意知情同意书' }
+
+  const res = await db.collection('bookings').where({ id: bookingId }).limit(1).get()
+  const booking = res.data && res.data[0]
+  if (!booking) return { success: false, error: '预约不存在' }
+  if (!(await validateCheckinToken(booking, event.checkinToken))) {
+    return { success: false, invalidCode: true, error: '签到码无效或已失效，请重新扫描' }
+  }
+
+  const access = await getBookingAccess(openId, booking)
+  if (!access.allowed && !access.phone) {
+    return { success: false, requiresPhoneAuth: true, error: '请先授权预约手机号' }
+  }
+  if (!access.allowed) return { success: false, error: '该预约不属于当前微信账号' }
+
+  const input = event.data || {}
+  const signName = cleanText(input.name || booking.name, 40)
+  const gender = cleanText(input.gender || booking.gender, 10)
+  const age = cleanText(input.age || booking.age, 3)
+  const idCard = cleanText(input.idCard || booking.idCard, 18)
+  if (!signName) return { success: false, error: '签署人姓名不能为空' }
+  if (idCard && !/^\d{17}[\dXx]$/.test(idCard)) return { success: false, error: '身份证号码格式不正确' }
+
+  const now = new Date().toISOString()
+  const updated = await db.runTransaction(async transaction => {
+    const bookingRef = transaction.collection('bookings').doc(booking._id)
+    const freshRes = await bookingRef.get()
+    const fresh = freshRes && freshRes.data
+    if (!fresh) throw businessError('BOOKING_NOT_FOUND', '预约不存在')
+    if (fresh.visitDate !== todayInChina()) throw businessError('CHECKIN_NOT_TODAY', '只能在预约当天到店签到')
+    if (fresh._status !== 'confirmed') throw businessError('INVALID_STATUS', '该预约当前不可签到')
+    if (fresh.checkInAt) throw businessError('ALREADY_CHECKED_IN', '该预约已经完成签到')
+
+    const data = {
+      _status: 'visited',
+      checkInAt: now,
+      consentSignName: signName,
+      consentSignTime: now,
+      consentSignImage: '',
+      consentPhotoAuth1: input.photoAuth1 === true,
+      consentPhotoAuth2: input.photoAuth2 === true,
+      name: signName,
+      gender,
+      age,
+      idCard,
+      updatedAt: now,
+      _checkinTokenHash: '',
+      _checkinTokenExpiresAt: ''
+    }
+    if (!access.owner && access.phoneOwner) data._openid = openId
+    await bookingRef.update({ data })
+    return Object.assign({}, fresh, data)
+  }, 5)
+
+  const saved = updated && updated.result ? updated.result : updated
+  return {
+    success: true,
+    data: Object.assign(publicCheckinBooking(saved || booking), {
+      consentSignName: signName,
+      consentSignTime: now,
+      consentPhotoAuth1: input.photoAuth1 === true,
+      consentPhotoAuth2: input.photoAuth2 === true
+    })
+  }
+}
+
+async function startExperience(openId, event) {
+  const bookingId = cleanText(event.bookingId, 40)
+  if (!bookingId) return { success: false, error: '缺少预约编号' }
+  const res = await db.collection('bookings').where({ id: bookingId }).limit(1).get()
+  const booking = res.data && res.data[0]
+  if (!booking) return { success: false, error: '预约不存在' }
+  const access = await getBookingAccess(openId, booking)
+  if (!access.allowed) return { success: false, error: '该预约不属于当前微信账号' }
+
+  const now = new Date().toISOString()
+  await db.runTransaction(async transaction => {
+    const bookingRef = transaction.collection('bookings').doc(booking._id)
+    const freshRes = await bookingRef.get()
+    const fresh = freshRes && freshRes.data
+    if (!fresh) throw businessError('BOOKING_NOT_FOUND', '预约不存在')
+    if (fresh._status !== 'visited' || !fresh.checkInAt || !fresh.consentSignTime) {
+      throw businessError('INVALID_STATUS', '请先完成到店签到')
+    }
+    await bookingRef.update({ data: { _status: 'in_experience', updatedAt: now } })
+  }, 5)
+  return { success: true, data: { _status: 'in_experience', updatedAt: now } }
 }
 
 function pickFields(input, allowed) {
@@ -391,7 +549,7 @@ async function updateBooking(openId, event) {
     }
     if (Object.prototype.hasOwnProperty.call(data, '_status')) {
       const userStatuses = booking._status === 'confirmed'
-        ? ['visited', 'in_experience', 'cancelled']
+        ? ['cancelled']
         : []
       if (userStatuses.indexOf(data._status) === -1) {
         return { success: false, error: '当前用户无权执行该状态变更' }
@@ -440,8 +598,12 @@ exports.main = async (event) => {
   if (!openId) return { success: false, error: '无法识别当前微信用户' }
   try {
     if (event.action === 'create') return await createBooking(openId, event)
-    if (event.action === 'listToday') return await listToday(openId, event.visitDate)
-    if (event.action === 'getForCheckin') return await getForCheckin(openId, String(event.bookingId || '').trim())
+    if (event.action === 'listToday') return await listToday(openId, event.visitDate, event.checkinToken)
+    if (event.action === 'getForCheckin') {
+      return await getForCheckin(openId, String(event.bookingId || '').trim(), event.checkinToken)
+    }
+    if (event.action === 'completeCheckin') return await completeCheckin(openId, event)
+    if (event.action === 'startExperience') return await startExperience(openId, event)
     if (event.action === 'update') return await updateBooking(openId, event)
     return { success: false, error: '不支持的操作' }
   } catch (err) {
@@ -452,6 +614,12 @@ exports.main = async (event) => {
     }
     if (message.includes('BOOKING_NOT_FOUND:')) {
       return { success: false, error: '预约不存在' }
+    }
+    if (message.includes('CHECKIN_NOT_TODAY:')) {
+      return { success: false, error: '只能在预约当天到店签到' }
+    }
+    if (message.includes('ALREADY_CHECKED_IN:')) {
+      return { success: false, error: '该预约已经完成签到' }
     }
     return { success: false, error: err.message || '预约服务失败' }
   }

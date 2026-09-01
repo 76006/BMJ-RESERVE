@@ -24,7 +24,7 @@ Page({
       return
     }
     const sys = wx.getSystemInfoSync()
-    const isDevtools = sys.platform === 'devtools' || /^Windows|Mac/.test(sys.system || '')
+    const isDevtools = sys.platform === 'devtools'
     this.setData({ isDevtools })
     this.loadConfig()
   },

@@ -1,8 +1,48 @@
 // 云函数：生成门店签到小程序码
 // 部署后通过 dashboard 的「生成门店签到码」按钮触发
 const cloud = require('wx-server-sdk')
+const crypto = require('crypto')
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 const db = cloud.database()
+
+function createToken() {
+  return crypto.randomBytes(8).toString('base64')
+    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '')
+}
+
+function hashToken(token) {
+  return crypto.createHash('sha256').update(token, 'utf8').digest('hex')
+}
+
+function isMissingDocumentError(err) {
+  const message = String((err && (err.errMsg || err.message)) || '').toLowerCase()
+  return message.includes('not exist') || message.includes('not found') ||
+    message.includes('not_exist') || message.includes('document_not_found') || message.includes('-502001')
+}
+
+async function saveStoreToken(tokenHash, now) {
+  const ref = db.collection('store_config').doc('current')
+  try {
+    await ref.get()
+    await ref.update({ data: { checkinQrTokenHash: tokenHash, checkinQrUpdatedAt: now } })
+  } catch (err) {
+    if (!isMissingDocumentError(err)) throw err
+    await ref.set({
+      data: {
+        storeName: '冰美肌',
+        address: '',
+        contactPhone: '',
+        contactWechat: '',
+        businessHours: '',
+        appointmentNotice: '请提前10分钟到店，素颜更佳',
+        checkinQrTokenHash: tokenHash,
+        checkinQrUpdatedAt: now,
+        createdAt: now,
+        updatedAt: now
+      }
+    })
+  }
+}
 
 async function isAdmin(openId) {
   if (!openId) return false
@@ -29,19 +69,44 @@ exports.main = async (event, context) => {
     if (bookingId && !/^[A-Za-z0-9_-]{1,24}$/.test(bookingId)) {
       return { success: false, error: '预约编号格式不正确' }
     }
+    let booking = null
     if (bookingId) {
       const bookingRes = await db.collection('bookings').where({ id: bookingId }).limit(1).get()
-      const booking = bookingRes.data && bookingRes.data[0]
+      booking = bookingRes.data && bookingRes.data[0]
       if (!booking) return { success: false, error: '预约不存在' }
       if (booking._status !== 'confirmed') {
         return { success: false, error: '只有已确认的预约可以生成签到码' }
       }
     }
 
+    // 签到码不再只携带可猜测的预约编号；令牌仅保存哈希，由 bookingService 校验。
+    const checkinToken = createToken()
+    const scene = bookingId
+      ? 'id=' + bookingId + '&t=' + checkinToken
+      : 'checkin=true&t=' + checkinToken
+    if (scene.length > 32) {
+      return { success: false, error: '预约编号过长，无法生成安全签到码' }
+    }
+    const tokenHash = hashToken(checkinToken)
+    const now = new Date().toISOString()
+    if (booking) {
+      const expiresAt = new Date(booking.visitDate + 'T23:59:59+08:00').toISOString()
+      await db.collection('bookings').doc(booking._id).update({
+        data: {
+          _checkinTokenHash: tokenHash,
+          _checkinTokenExpiresAt: expiresAt,
+          _checkinQrUpdatedAt: now,
+          updatedAt: now
+        }
+      })
+    } else {
+      await saveStoreToken(tokenHash, now)
+    }
+
     // 调用微信获取无限制数量的小程序码
     // 显式进入首页，由 app.js 解析 scene 后跳转签到页。
     const result = await cloud.openapi.wxacode.getUnlimited({
-      scene: bookingId ? 'id=' + bookingId : 'checkin=true',
+      scene,
       page: 'pages/index/index',
       checkPath: false,
       envVersion,

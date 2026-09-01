@@ -84,11 +84,14 @@ Page({
     if (!app.globalData._launchCheckin) return false
     app.globalData._launchCheckin = false
     const bookingId = app.globalData._checkinBookingId
+    const checkinToken = app.globalData._checkinToken
     app.globalData._checkinBookingId = null
+    app.globalData._checkinToken = ''
+    const tokenQuery = checkinToken ? '&token=' + encodeURIComponent(checkinToken) : ''
     if (bookingId) {
-      wx.navigateTo({ url: '/pages/checkin/guest/guest?id=' + bookingId })
+      wx.navigateTo({ url: '/pages/checkin/guest/guest?id=' + encodeURIComponent(bookingId) + tokenQuery })
     } else {
-      wx.navigateTo({ url: '/pages/checkin/guest/guest' })
+      wx.navigateTo({ url: '/pages/checkin/guest/guest' + (checkinToken ? '?token=' + encodeURIComponent(checkinToken) : '') })
     }
     return true
   },
@@ -157,6 +160,8 @@ Page({
       wx.hideLoading()
       const result = res.result || {}
       if (result.phone) {
+        const app = getApp()
+        if (app.cacheVerifiedPhone) app.cacheVerifiedPhone(result.phone)
         this.setData({
           phone: result.phone,
           phoneVerified: true

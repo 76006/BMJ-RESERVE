@@ -17,6 +17,8 @@ Page({
 
     // not_found 兜底：今日可签到的预约列表（供手动选择）
     todayBookings: [],
+    needsPhoneAuth: false,
+    authorizing: false,
 
     // 自动补全后的展示数据（合并当前预约 + 历史记录）
     bookingData: {
@@ -42,12 +44,13 @@ Page({
     const app = getApp()
     const today = this._fmtDate(new Date())
     this.setData({ today })
+    this._checkinToken = String(options.token || '').trim()
+    this._pendingBookingId = String(options.id || '').trim()
 
     // 情况1：预约专属小程序码传入 bookingId。
     // 始终由云端校验该预约是否属于当前微信，避免本地缓存误认。
-    if (options.id) {
-      const bookingId = (options.id || '').trim()
-      this._resolveById(bookingId)
+    if (this._pendingBookingId) {
+      this._resolveById(this._pendingBookingId)
       return
     }
 
@@ -74,11 +77,15 @@ Page({
     this.setData({ step: 'loading' })
     wx.cloud.callFunction({
       name: 'bookingService',
-      data: { action: 'getForCheckin', bookingId }
+      data: { action: 'getForCheckin', bookingId, checkinToken: this._checkinToken }
     }).then(res => {
       const result = res.result || {}
       if (!result.success || !result.data) {
-        this.setData({ step: 'not_found', todayBookings: [] })
+        this.setData({
+          step: 'not_found',
+          todayBookings: [],
+          needsPhoneAuth: result.requiresPhoneAuth === true
+        })
         wx.showToast({ title: result.error || '未找到可签到预约', icon: 'none' })
         return
       }
@@ -87,10 +94,10 @@ Page({
       if (!all.some(item => item.id === booking.id)) all.unshift(booking)
       app.globalData.bookings = all
       const merged = this._mergeCustomerData(booking)
-      this.setData({ step: 'confirm', booking: merged, bookingData: merged })
+      this.setData({ step: 'confirm', booking: merged, bookingData: merged, needsPhoneAuth: false })
     }).catch(err => {
       console.warn('[签到] 按预约编号查询失败:', err)
-      this.setData({ step: 'not_found', todayBookings: [] })
+      this.setData({ step: 'not_found', todayBookings: [], needsPhoneAuth: false })
     })
   },
 
@@ -117,40 +124,72 @@ Page({
       // 仅1条 → 自动匹配进入签署；多条 → 展示手动选择列表；0条 → 兜底
       if (cloudBookings.length === 1) {
         const merged = self._mergeCustomerData(cloudBookings[0])
-        self.setData({ step: 'confirm', booking: merged, bookingData: merged })
+        self.setData({ step: 'confirm', booking: merged, bookingData: merged, needsPhoneAuth: false })
         return
       }
       if (cloudBookings.length > 1) {
         const list = self._getTodayBookings(today, cloudBookings)
-        self.setData({ step: 'not_found', todayBookings: list })
+        self.setData({ step: 'not_found', todayBookings: list, needsPhoneAuth: false })
         return
       }
 
       // 云端也无匹配 → not_found，附带"手动选择今日预约"兜底（尽力用本地数据）
       const fallback = self._getTodayBookings(today)
-      self.setData({ step: 'not_found', todayBookings: fallback })
+      self.setData({ step: 'not_found', todayBookings: fallback, needsPhoneAuth: false })
     }).catch(function (err) {
       console.warn('[签到] 云端查询失败，降级到本地:', err)
       const fallback = self._getTodayBookings(today)
-      self.setData({ step: 'not_found', todayBookings: fallback })
+      self.setData({
+        step: 'not_found',
+        todayBookings: fallback,
+        needsPhoneAuth: err && err.requiresPhoneAuth === true
+      })
     })
   },
 
   // 云端查询：服务端只使用当前微信已验证手机号，不信任客户端传入手机号。
   _fetchTodayByPhone(phone, today) {
-    if (!phone) return Promise.resolve([])
     return wx.cloud.callFunction({
       name: 'bookingService',
-      data: { action: 'listToday', visitDate: today }
+      data: { action: 'listToday', visitDate: today, checkinToken: this._checkinToken }
     }).then(function (res) {
         const result = res.result || {}
-        if (!result.success) throw new Error(result.error || '查询失败')
+        if (!result.success) {
+          const error = new Error(result.error || '查询失败')
+          error.requiresPhoneAuth = result.requiresPhoneAuth === true
+          error.invalidCode = result.invalidCode === true
+          throw error
+        }
         return result.data || []
       })
-      .catch(function (err) {
-        console.warn('[签到] 查询本人今日预约失败:', err)
-        return []
-      })
+  },
+
+  // 首次使用当前微信签到时，现场授权预约手机号；云端验证后会自动绑定操作师代下的预约。
+  onAuthorizePhone(e) {
+    if (!e.detail || e.detail.errMsg !== 'getPhoneNumber:ok' || !e.detail.code) {
+      wx.showToast({ title: '需要授权预约手机号才能识别预约', icon: 'none' })
+      return
+    }
+    if (this.data.authorizing) return
+    this.setData({ authorizing: true })
+    wx.showLoading({ title: '正在验证...', mask: true })
+    wx.cloud.callFunction({
+      name: 'getPhoneNumber',
+      data: { code: e.detail.code }
+    }).then(res => {
+      const result = res.result || {}
+      if (!result.phone) throw new Error(result.error || '手机号验证失败')
+      const app = getApp()
+      if (app.cacheVerifiedPhone) app.cacheVerifiedPhone(result.phone)
+      this.setData({ authorizing: false, needsPhoneAuth: false })
+      wx.hideLoading()
+      if (this._pendingBookingId) this._resolveById(this._pendingBookingId)
+      else this._resolveByCloud(result.phone, this.data.today)
+    }).catch(err => {
+      wx.hideLoading()
+      this.setData({ authorizing: false })
+      wx.showToast({ title: err.message || '手机号验证失败', icon: 'none' })
+    })
   },
 
   // ========== 数据自动补全：手机号匹配历史记录，合并字段 ==========
@@ -324,39 +363,30 @@ Page({
     const booking = this.data.booking
     if (!booking) { this._submitting = false; return }
 
-    // 冷启动时全量加载可能晚于扫码查询，签署前再次确保当前预约在本地模型中。
-    if (!app.getBookingById(booking.id)) {
-      app.globalData.bookings = [Object.assign({}, booking)].concat(app.globalData.bookings || [])
-    }
-
-    // 写入知情同意书签署记录（含摄影授权）
-    app.saveConsent(booking.id, {
-      name: this.data.bookingData.name || booking.name,
-      image: '',
-      photoAuth1: this.data.photoAuth1,
-      photoAuth2: this.data.photoAuth2
-    })
-
-    // 将自动补全后的客户信息回写到当前 booking
-    app.updateCustomerFields(booking.id, {
+    wx.showLoading({ title: '正在签到...', mask: true })
+    app.completeGuestCheckin(booking.id, this._checkinToken, {
       name: this.data.bookingData.name || booking.name,
       gender: this.data.bookingData.gender || booking.gender,
       age: this.data.bookingData.age || booking.age,
       idCard: this.data.bookingData.idCard || booking.idCard,
-      phone: this.data.bookingData.phone || booking.phone
-    })
-
-    // 执行签到（不自动切换状态）
-    const checkedIn = app.checkIn(booking.id, '')
-    if (!checkedIn) {
-      // 签到失败：预约未确认或已签到过
-      this.setData({ step: 'error' })
+      photoAuth1: this.data.photoAuth1,
+      photoAuth2: this.data.photoAuth2
+    }).then(saved => {
+      wx.hideLoading()
+      const merged = Object.assign({}, booking, saved || {})
+      this.setData({
+        step: 'done',
+        booking: merged,
+        bookingData: Object.assign({}, this.data.bookingData, merged),
+        showExperienceModal: true
+      })
       this._submitting = false
-      return
-    }
-
-    this.setData({ step: 'done', showExperienceModal: true })
-    this._submitting = false
+    }).catch(err => {
+      wx.hideLoading()
+      this._submitting = false
+      this.setData({ step: 'error' })
+      wx.showToast({ title: err.message || '签到失败，请联系工作人员', icon: 'none' })
+    })
   },
 
   // 拒绝签署
@@ -379,16 +409,23 @@ Page({
     const app = getApp()
     const booking = this.data.booking
     if (!booking) return
-    // 状态守卫：仅已预约（签到后）或已到店可切体验中
-    if (booking._status !== 'confirmed' && booking._status !== 'visited') {
+    // 完成签到后云端状态已经是“已到店”，只有该状态可以开始体验。
+    if (booking._status !== 'visited') {
       wx.showToast({ title: '状态异常，请联系工作人员', icon: 'none' })
       return
     }
-    app.updateBookingStatus(booking.id, 'in_experience')
-    const name = booking.name || ''
-    this.setData({
-      showExperienceModal: false,
-      welcomeText: name + '  欢迎体验  过程中有任何不适请告知操作师'
+    wx.showLoading({ title: '正在更新...', mask: true })
+    app.startGuestExperience(booking.id).then(data => {
+      wx.hideLoading()
+      const updated = Object.assign({}, booking, data || {}, { _status: 'in_experience' })
+      this.setData({
+        booking: updated,
+        showExperienceModal: false,
+        welcomeText: (booking.name || '') + '  欢迎体验  过程中有任何不适请告知操作师'
+      })
+    }).catch(err => {
+      wx.hideLoading()
+      wx.showToast({ title: err.message || '状态更新失败', icon: 'none' })
     })
   },
 
@@ -397,12 +434,11 @@ Page({
     const app = getApp()
     const booking = this.data.booking
     if (!booking) return
-    // 状态守卫：仅已预约（签到后）可切已到店
-    if (booking._status !== 'confirmed') {
+    // 签到事务已经写入“已到店”，选择“否”只需关闭提示。
+    if (booking._status !== 'visited') {
       wx.showToast({ title: '状态异常，请联系工作人员', icon: 'none' })
       return
     }
-    app.updateBookingStatus(booking.id, 'visited')
     this.setData({ showExperienceModal: false })
     wx.showToast({ title: '已记录', icon: 'success' })
   },

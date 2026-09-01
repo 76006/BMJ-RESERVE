@@ -90,6 +90,7 @@ App({
     _cloudReady: false,   // 云数据库是否就绪
     _launchCheckin: false,     // 是否需要跳转签到页
     _checkinBookingId: '',     // 扫描签到码带入的预约ID
+    _checkinToken: '',         // 签到码中的服务端校验令牌
     openId: ''              // 用户 openId（云开发身份标识）
   },
 
@@ -153,6 +154,9 @@ App({
       this.globalData._launchCheckin = true
       this.globalData._checkinBookingId = q.id
     }
+    if (q.t) {
+      this.globalData._checkinToken = q.t
+    }
   },
 
   onShow(options) {
@@ -206,7 +210,7 @@ App({
 
     // 开发工具环境下跳过云端，直接用本地演示数据（避免超时+缓存旧数据）
     const sys = wx.getSystemInfoSync()
-    const isDevtools = sys.platform === 'devtools' || /^Windows|Mac/.test(sys.system || '')
+    const isDevtools = sys.platform === 'devtools'
     if (isDevtools) {
       console.log('[演示模式] 开发工具：跳过云端查询，直接加载最新演示数据')
       wx.removeStorageSync('bookings')
@@ -298,7 +302,7 @@ App({
 
   _loadBookingsLocal() {
     const sys = wx.getSystemInfoSync()
-    const isDevtools = sys.platform === 'devtools' || /^Windows|Mac/.test(sys.system || '')
+    const isDevtools = sys.platform === 'devtools'
     if (isDevtools) {
       console.log('[演示模式] 开发工具：清除本地缓存，加载最新演示数据')
       wx.removeStorageSync('bookings')
@@ -306,11 +310,8 @@ App({
       return
     }
     const bookings = wx.getStorageSync('bookings') || []
-    if (bookings.length === 0) {
-      this._seedDemoData()
-    } else {
-      this.globalData.bookings = bookings
-    }
+    // 真机云端暂时不可用时只读取当前账号本地缓存；没有缓存就保持空数据，绝不清理其他资料。
+    this.globalData.bookings = bookings
   },
 
   // ===========================================
@@ -336,7 +337,7 @@ App({
       }
       const booking = result.data
       const sys = wx.getSystemInfoSync()
-      const isDevtools = sys.platform === 'devtools' || /^Windows|Mac/.test(sys.system || '')
+      const isDevtools = sys.platform === 'devtools'
       if (isDevtools && self.globalData.openId) {
         booking._openid = self.globalData.openId
         booking._creatorOpenId = self.globalData.openId
@@ -395,7 +396,7 @@ App({
   getSchedule(date) {
     const self = this
     const sys = wx.getSystemInfoSync()
-    const isDevtools = sys.platform === 'devtools' || /^Windows|Mac/.test(sys.system || '')
+    const isDevtools = sys.platform === 'devtools'
 
     return new Promise((resolve) => {
       // 演示模式（Devtools）：直接读本地 _schedule，避免云端超时
@@ -428,7 +429,7 @@ App({
   getOccupiedSlots(date) {
     const self = this
     const sys = wx.getSystemInfoSync()
-    const isDevtools = sys.platform === 'devtools' || /^Windows|Mac/.test(sys.system || '')
+    const isDevtools = sys.platform === 'devtools'
 
     return new Promise((resolve) => {
       const buildFromLocal = () => {
@@ -536,13 +537,57 @@ App({
     return true
   },
 
+  // 顾客扫码签到专用入口：由云端一次性校验签到码、预约归属、签署内容并写入到店状态。
+  completeGuestCheckin(bookingId, checkinToken, signData) {
+    const self = this
+    return wx.cloud.callFunction({
+      name: 'bookingService',
+      data: {
+        action: 'completeCheckin',
+        bookingId,
+        checkinToken,
+        consentAccepted: true,
+        data: signData || {}
+      }
+    }).then(res => {
+      const result = res.result || {}
+      if (!result.success || !result.data) {
+        const error = new Error(result.error || '签到失败')
+        error.requiresPhoneAuth = result.requiresPhoneAuth === true
+        error.invalidCode = result.invalidCode === true
+        throw error
+      }
+      const local = self._find(bookingId)
+      if (local) Object.assign(local, result.data)
+      else self.globalData.bookings.unshift(Object.assign({}, result.data))
+      self._saveLocal()
+      return result.data
+    })
+  },
+
+  // 顾客签到成功后选择“开始体验”，只允许云端从已到店状态继续流转。
+  startGuestExperience(bookingId) {
+    const self = this
+    return wx.cloud.callFunction({
+      name: 'bookingService',
+      data: { action: 'startExperience', bookingId }
+    }).then(res => {
+      const result = res.result || {}
+      if (!result.success) throw new Error(result.error || '状态更新失败')
+      const local = self._find(bookingId)
+      if (local) Object.assign(local, result.data || { _status: 'in_experience' })
+      self._saveLocal()
+      return result.data || {}
+    })
+  },
+
   // ===========================================
   // 管理员认证（服务端 OPENID 白名单）
   // ===========================================
   // 真机每次启动都由云函数重新确认；本地缓存只用于开发工具界面预览。
   _checkAdminByOpenId(done) {
     const sys = wx.getSystemInfoSync()
-    if (sys.platform === 'devtools' || /^Windows|Mac/.test(sys.system || '')) {
+    if (sys.platform === 'devtools') {
       if (wx.getStorageSync('_isAdmin')) {
         this.globalData.isAdmin = true
         this.globalData.adminName = wx.getStorageSync('_adminName') || '\u7ba1\u7406\u5458'
@@ -641,6 +686,20 @@ App({
 
   getUserProfile() {
     return wx.getStorageSync('userProfile') || null
+  },
+
+  // 微信手机号授权成功后的统一缓存入口，供首页、签到页和“我的”页共享。
+  cacheVerifiedPhone(phone) {
+    const value = String(phone || '').trim()
+    if (!/^1[3-9]\d{9}$/.test(value)) return false
+    wx.setStorageSync('_phoneVerified', true)
+    wx.setStorageSync('_userPhone', value)
+    const profile = this.getUserProfile() || {}
+    wx.setStorageSync('userProfile', Object.assign({}, profile, {
+      phone: value,
+      updatedAt: new Date().toISOString()
+    }))
+    return true
   },
 
   updateBookingStatus(bookingId, newStatus) {
@@ -868,7 +927,7 @@ App({
 
     // 开发工具/真机调试：直接返回 mock openId，避免云端调用超时影响调试
     const sys = wx.getSystemInfoSync()
-    const isDevtools = sys.platform === 'devtools' || /^Windows|Mac/.test(sys.system || '')
+    const isDevtools = sys.platform === 'devtools'
     if (isDevtools) {
       const mockOpenId = 'mock_openid_devtools'
       this._activateIdentity(mockOpenId)

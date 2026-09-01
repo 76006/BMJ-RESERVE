@@ -12,7 +12,17 @@
   <view class="g-step nf-wrap" wx:if="{{step === 'not_found'}}">
     <view class="nf-icon">📅</view>
     <view class="nf-title">暂未自动匹配到预约</view>
-    <view class="nf-desc">如您今日有预约，请手动选择；否则请联系工作人员协助签到</view>
+    <view class="nf-desc" wx:if="{{needsPhoneAuth}}">请授权预约时使用的微信手机号，系统将自动识别并绑定您的预约</view>
+    <view class="nf-desc" wx:else>如您今日有预约，请手动选择；否则请联系工作人员协助签到</view>
+
+    <button
+      class="g-btn-primary auth-phone-btn"
+      wx:if="{{needsPhoneAuth}}"
+      open-type="getPhoneNumber"
+      bindgetphonenumber="onAuthorizePhone"
+      loading="{{authorizing}}"
+      disabled="{{authorizing}}"
+    >授权手机号并继续签到</button>
 
     <!-- 手动选择今日预约 -->
     <view class="nf-list" wx:if="{{todayBookings.length > 0}}">
@@ -29,7 +39,7 @@
       </view>
     </view>
 
-    <button class="g-btn-primary" bindtap="contactStaff">联系工作人员</button>
+    <button class="{{needsPhoneAuth ? 'g-btn-secondary' : 'g-btn-primary'}}" bindtap="contactStaff">联系工作人员</button>
   </view>
 
   <!-- 确认预约 -->

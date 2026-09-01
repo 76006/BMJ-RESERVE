@@ -82,14 +82,21 @@ async function save(openId, input) {
   if (!data.appointmentNotice) data.appointmentNotice = DEFAULT_CONFIG.appointmentNotice
 
   const now = new Date().toISOString()
-  await db.collection('store_config').doc('current').set({
-    data: Object.assign({}, data, {
-      configured: true,
-      updatedAt: now,
-      updatedByOpenId: openId,
-      updatedByName: admin.name || '管理员'
-    })
+  const storeRef = db.collection('store_config').doc('current')
+  const updateData = Object.assign({}, data, {
+    configured: true,
+    updatedAt: now,
+    updatedByOpenId: openId,
+    updatedByName: admin.name || '管理员'
   })
+  try {
+    await storeRef.get()
+    // 使用 update 保留签到码令牌等内部字段，门店资料保存不应导致现有签到码失效。
+    await storeRef.update({ data: updateData })
+  } catch (err) {
+    if (!isMissingDocumentError(err)) throw err
+    await storeRef.set({ data: Object.assign({ createdAt: now }, updateData) })
+  }
   return { success: true, data: publicConfig(Object.assign({}, data, { configured: true, updatedAt: now })) }
 }
 

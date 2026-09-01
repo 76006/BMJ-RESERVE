@@ -17,7 +17,7 @@ Page({
   loadSchedule() {
     const app = getApp()
     const sys = wx.getSystemInfoSync()
-    const isDevtools = sys.platform === 'devtools' || /^Windows|Mac/.test(sys.system || '')
+    const isDevtools = sys.platform === 'devtools'
 
     if (isDevtools) {
       // 演示模式：读本地降级
@@ -48,7 +48,7 @@ Page({
     const app = getApp()
     const schedule = this.data.schedule
     const sys = wx.getSystemInfoSync()
-    const isDevtools = sys.platform === 'devtools' || /^Windows|Mac/.test(sys.system || '')
+    const isDevtools = sys.platform === 'devtools'
 
     if (isDevtools) {
       // 演示模式：写本地降级

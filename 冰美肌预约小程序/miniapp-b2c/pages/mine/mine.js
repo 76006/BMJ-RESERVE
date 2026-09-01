@@ -58,7 +58,7 @@ Page({
       return
     }
     const sys = wx.getSystemInfoSync()
-    const isDevtools = sys.platform === 'devtools' || /^Windows|Mac/.test(sys.system || '')
+    const isDevtools = sys.platform === 'devtools'
 
     // 开发工具环境：保留已有管理员状态，否则默认模拟用户登录
     const wasAdmin = wx.getStorageSync('_isAdmin')
@@ -378,12 +378,12 @@ Page({
       wx.showToast({ title: '请输入正确的手机号', icon: 'none' })
       return
     }
-    wx.setStorageSync('_phoneVerified', true)
-    wx.setStorageSync('_userPhone', phone)
     try {
       var app = getApp()
-      if (app.saveUserProfile) {
-        app.saveUserProfile({ phone: phone })
+      if (app.cacheVerifiedPhone) app.cacheVerifiedPhone(phone)
+      else {
+        wx.setStorageSync('_phoneVerified', true)
+        wx.setStorageSync('_userPhone', phone)
       }
     } catch (e) { /* silent */ }
     this.setData({ isLoggedIn: true, userPhone: phone })
@@ -463,6 +463,11 @@ Page({
   // 开发工具一键切换管理员（跳过密码）
   // ===========================================
   quickSwitchToAdmin() {
+    const sys = wx.getSystemInfoSync()
+    if (sys.platform !== 'devtools') {
+      wx.showToast({ title: '仅开发工具可使用预览切换', icon: 'none' })
+      return
+    }
     const app = getApp()
     app.globalData.isAdmin = true
     app.globalData.adminRole = 'superadmin'
