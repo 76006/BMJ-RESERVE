@@ -323,7 +323,11 @@ Page({
       self._handlePhoneLogin(result.phone)
       const app = getApp()
       if (result.isAdmin) {
+        const needsAdminReload = !app.globalData._cloudReady
         app._setAdminState(result)
+        if (needsAdminReload && app._loadAllBookingsAsAdmin) {
+          app._loadAllBookingsAsAdmin()
+        }
         self.setData({
           isAdmin: true,
           adminRole: result.role,
@@ -332,6 +336,10 @@ Page({
         self._loadAdminData()
         wx.showToast({ title: '已识别为工作人员', icon: 'success' })
       } else {
+        if (!app.globalData._cloudReady && app._loadOwnBookingsOnly) {
+          app._loadOwnBookingsOnly()
+        }
+        self._loadUserData()
         wx.showToast({ title: '登录成功', icon: 'success' })
       }
     }).catch(function (err) {
@@ -358,6 +366,53 @@ Page({
     } catch (e) { /* silent */ }
     this.setData({ isLoggedIn: true, userPhone: phone })
 
+  },
+
+  // 退出当前手机号身份，回到微信手机号授权入口
+  logoutUser() {
+    wx.showModal({
+      title: '退出当前登录',
+      content: '退出后需要重新授权手机号，是否继续？',
+      confirmText: '退出',
+      confirmColor: '#C94B4B',
+      success: (res) => {
+        if (!res.confirm) return
+
+        const app = getApp()
+        const wasAdmin = this.data.isAdmin || app.globalData.isAdmin
+        if (app.logoutAdmin) app.logoutAdmin()
+
+        wx.removeStorageSync('_phoneVerified')
+        wx.removeStorageSync('_userPhone')
+        wx.removeStorageSync('userProfile')
+
+        // 管理员退出时清除全量预约；普通用户只保留属于当前微信的预约缓存。
+        if (wasAdmin) {
+          wx.removeStorageSync('bookings')
+          app.globalData.bookings = []
+          app.globalData._cloudReady = false
+        }
+
+        this.setData({
+          isLoggedIn: false,
+          isAdmin: false,
+          adminRole: '',
+          adminName: '',
+          previewRole: '',
+          bookings: [],
+          greeting: '欢迎使用',
+          userName: '',
+          userGender: '',
+          userAge: '',
+          userPhone: '',
+          visitCount: 0,
+          lastVisitDate: '',
+          isFirstVisit: true
+        })
+
+        wx.showToast({ title: '已退出，请重新登录', icon: 'none' })
+      }
+    })
   },
 
   // ===========================================

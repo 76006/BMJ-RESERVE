@@ -106,6 +106,10 @@
       <text class="shortcut-arrow">›</text>
     </view>
   </view>
+  <view class="logout-section">
+    <view class="logout-btn" bindtap="logoutUser">退出当前登录</view>
+    <view class="logout-hint">退出后可重新授权手机号</view>
+  </view>
   <view class="admin-bottom-space"></view>
 
 </block>
@@ -246,6 +250,11 @@
         </view>
       </view>
     </view>
+  </view>
+
+  <view class="logout-section" wx:if="{{isLoggedIn}}">
+    <view class="logout-btn" bindtap="logoutUser">退出当前登录</view>
+    <view class="logout-hint">退出后可重新授权手机号</view>
   </view>
 
 </block>

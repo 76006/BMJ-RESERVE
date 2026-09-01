@@ -454,6 +454,12 @@
   color: var(--red);
   box-shadow: var(--shadow-sm);
 }
+.logout-hint {
+  margin-top: 12rpx;
+  text-align: center;
+  font-size: 22rpx;
+  color: var(--text-muted);
+}
 
 /* 企业微信客服二维码弹窗 */
 .qr-mask {
