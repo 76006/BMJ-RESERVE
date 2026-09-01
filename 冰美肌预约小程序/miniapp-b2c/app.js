@@ -251,13 +251,6 @@ App({
           self.globalData.bookings = data
           self.globalData._cloudReady = true
           console.log('[云开发] 用户加载 ' + data.length + ' 条预约记录（仅本人）')
-          if (data.length === 0) {
-            const local = wx.getStorageSync('bookings') || []
-            if (local.length > 0) {
-              console.log('[云开发] 检测到本地数据，开始迁移...')
-              self._migrateLocalToCloud(local)
-            }
-          }
         })
         .catch(err => {
           clearTimeout(timer)
@@ -284,136 +277,47 @@ App({
     }
   },
 
-  // 本地数据 → 云数据库迁移
-  async _migrateLocalToCloud(localData) {
-    const db = this.globalData.db
-    for (const item of localData) {
-      try {
-        await db.collection('bookings').add({ data: item })
-      } catch (e) {
-        console.error('[迁移] 单条失败:', item.id, e && e.message ? e.message : e)
-      }
-    }
-    // 迁移完成后重新加载（仅加载本人的）
-    var self = this
-    var openid = this.globalData.openId || ''
-    var timer = setTimeout(() => {
-      console.warn('[迁移] 重新加载超时，使用本地数据')
-    }, 4500)
-    if (!openid) {
-      clearTimeout(timer)
-      console.warn('[迁移] 缺少 openId，停止重新读取')
-      return
-    }
-    var query = db.collection('bookings').where({ _openid: openid }).limit(200).get()
-    query.then(res => {
-      clearTimeout(timer)
-      var data = res.data || []
-      data.sort(function(a, b) {
-        var ta = a.createdAt || 0
-        var tb = b.createdAt || 0
-        return tb.localeCompare ? tb.localeCompare(ta) : (tb > ta ? -1 : 1)
-      })
-      self.globalData.bookings = data
-      console.log('[迁移] 完成，共 ' + data.length + ' 条')
-      wx.showToast({ title: '数据已同步到云端', icon: 'success' })
-    }).catch(err => {
-      clearTimeout(timer)
-      console.warn('[迁移] 重新加载失败:', err && err.message ? err.message : err)
-    })
-  },
-
   // ===========================================
   // 创建体验记录（用户提交）
   // ===========================================
-  // 提交预约（异步：确保 openId 就绪后再写入，修复竞态风险）
+  // 提交预约：只调用受控云函数，由云端事务完成时段校验、占位和创建。
   addBooking(userData, callback) {
-    var self = this
-    this.getOpenId(function (openid) {
-      const booking = {
-      id: Date.now().toString(36),
-
-      // === 灰色：用户填写 ===
-      name: userData.name,
-      gender: userData.gender,
-      age: userData.age,
-      idCard: userData.idCard || '',          // 身份证号
-      visitDate: userData.visitDate,
-      visitTime: userData.visitTime || '',    // 时间段，如 "14:00-15:00"
-      medicalHistory: userData.medicalHistory || '',
-      needs: userData.needs || '',
-      phone: userData.phone || '',
-
-      // === 来源渠道（扫码带入）===
-      channel: self.globalData.channel || 'direct',
-      trainerId: self.globalData.trainerId || '',
-      trainerName: self.globalData.trainerName || '',
-
-      // === 知情同意书 ===
-      consentSignName: userData.consentSignName || '',
-      consentSignTime: userData.consentSignTime || '',
-      consentSignImage: userData.consentSignImage || '',
-
-      // === 系统自动 ===
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      _creatorOpenId: openid || '',  // 创建者openId（用于用户端数据隔离，确保异步就绪）
-
-      // === 黄色：工作人员填写 ===
-      _status: 'pending_confirm',             // 初始状态：待操作师确认
-      _confirmedAt: '',                       // 操作师确认时间
-      _confirmedBy: '',                       // 确认人
-      deviceModel: '',                        // 设备型号（签到时录入）
-      checkInAt: '',                          // 签到时间
-      _clientManager: '',
-      _totalEnergy: '',
-      _shotDistribution: '',
-      _maxLevel: '',
-      _immediateSatisfaction: 0,   // 1-5分
-      _comfortSatisfaction: 0,      // 1-5分
-      _photos: [],                  // [{path, name}]
-      _beforePhotos: [],             // [{path, name}] 体验前
-      _halfPhotos: [],               // [{path, name}] 半侧脸对比
-      _afterPhotos: [],              // [{path, name}] 体验后
-      _productFeedback: '',
-      _day1FollowUp: '',
-      _day30FollowUp: '',
-      _day90FollowUp: '',
-
-      // === 管理员通用 ===
-      _adminNote: '',
-      _followUpRecords: [],
-      _feedback24: false,  // 24h回访是否已提交
-      _feedback30: false,  // 30天回访是否已提交
-      _feedback90: false   // 90天回访是否已提交
+    const self = this
+    const payload = Object.assign({}, userData, {
+      channel: userData.channel || self.globalData.channel || 'direct',
+      trainerId: userData.trainerId || self.globalData.trainerId || '',
+      trainerName: userData.trainerName || self.globalData.trainerName || ''
+    })
+    wx.cloud.callFunction({
+      name: 'bookingService',
+      data: { action: 'create', data: payload },
+      timeout: 20000
+    }).then(res => {
+      const result = res.result || {}
+      if (!result.success || !result.data) {
+        if (callback) callback(null, result.error || '预约提交失败')
+        return
       }
-
+      const booking = result.data
+      const sys = wx.getSystemInfoSync()
+      const isDevtools = sys.platform === 'devtools' || /^Windows|Mac/.test(sys.system || '')
+      if (isDevtools && self.globalData.openId) {
+        booking._openid = self.globalData.openId
+        booking._creatorOpenId = self.globalData.openId
+      }
       self.globalData.bookings.unshift(booking)
-
-      // 同步写入云数据库
-      const db = self.globalData.db
-      if (db) {
-        db.collection('bookings').add({ data: booking })
-          .then(res => {
-            booking._cloudId = res._id
-            console.log('[云开发] 新增预约:', res._id)
-            self._saveLocal()
-          })
-          .catch(err => { console.warn('[云开发] 新增失败:', err) })
-      } else {
-        self._saveLocal()
-      }
-
-      // 保存用户画像（用于新老客户识别）
+      self._saveLocal()
       self.saveUserProfile({
-        name: userData.name || '',
-        gender: userData.gender || '',
-        age: userData.age || '',
-        phone: userData.phone || ''
+        name: booking.name || '',
+        gender: booking.gender || '',
+        age: booking.age || '',
+        phone: booking.phone || ''
       })
-
       if (callback) callback(booking)
-    })  // end getOpenId
+    }).catch(err => {
+      console.warn('[云开发] 预约创建失败:', err)
+      if (callback) callback(null, '网络异常，请稍后重试')
+    })
   },
 
   // ===========================================
@@ -733,8 +637,7 @@ App({
     return true
   },
 
-  // 重新预约：基于已取消的旧记录新建预约（复制客户信息，新生成记录ID）
-  // 异步获取 openId 确保隐私隔离（避免继承旧记录的空 openId）
+  // 重新预约：仅保存预填资料，返回首页重新选择日期与时段后再走云端创建。
   // @param {string} oldBookingId - 旧预约ID
   // @param {function} callback - 新booking加入globalData后回调（避免调用方在异步完成前刷新数据）
   rebook(oldBookingId, callback) {
@@ -743,52 +646,20 @@ App({
       if (callback) callback(null)
       return null
     }
-    const self = this
-    // 先尝试获取当前用户的 openId，确保新记录的隐私隔离正确
-    this.getOpenId(function(openid) {
-      const newId = Date.now().toString(36) + Math.random().toString(36).slice(2, 6)
-      const newBooking = {
-        id: newId,
-        name: old.name,
-        gender: old.gender,
-        age: old.age,
-        idCard: old.idCard || '',
-        phone: old.phone,
-        medicalHistory: old.medicalHistory || '',
-        needs: old.needs || '',
-        visitDate: '',
-        visitTime: '',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        _status: 'pending_confirm',
-        _clientManager: '',
-        _totalEnergy: '', _shotDistribution: '', _maxLevel: '',
-        _immediateSatisfaction: 0, _comfortSatisfaction: 0,
-        _photos: [], _beforePhotos: [], _halfPhotos: [], _afterPhotos: [],
-        _productFeedback: '', _day1FollowUp: '', _day30FollowUp: '', _day90FollowUp: '',
-        _adminNote: '', _followUpRecords: [],
-        _creatorOpenId: openid || old._creatorOpenId || '',
-        _feedback24: false, _feedback30: false, _feedback90: false
-      }
-      self.globalData.bookings.unshift(newBooking)
-      self._saveLocal()
-      // 回调在本地数据就绪后立即触发，不等待云端写入
-      if (callback) callback(newId)
-
-      // 新增记录必须用 add，不能用 _updateCloud（后者只 update 已有文档）
-      const db = self.globalData.db
-      if (db) {
-        db.collection('bookings').add({ data: newBooking })
-          .then(res => {
-            newBooking._cloudId = res._id
-            console.log('[云开发] 重新预约新增:', res._id)
-            self._saveLocal()
-          })
-          .catch(err => { console.warn('[云开发] 重新预约新增失败:', err) })
-      }
+    wx.setStorageSync('_rebookDraft', {
+      name: old.name || '',
+      gender: old.gender || '',
+      age: old.age || '',
+      idCard: old.idCard || '',
+      phone: old.phone || '',
+      medicalHistory: old.medicalHistory || '',
+      needs: old.needs || '',
+      channel: old.channel || 'direct',
+      trainerId: old.trainerId || '',
+      trainerName: old.trainerName || ''
     })
-    // 无回调时返回标记以保持旧调用兼容
-    if (!callback) return 'rebook_pending'
+    if (callback) callback('draft')
+    return 'draft'
   },
 
   updateAdminNote(bookingId, note) {

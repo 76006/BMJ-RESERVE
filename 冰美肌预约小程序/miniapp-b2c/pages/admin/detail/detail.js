@@ -493,18 +493,14 @@ Page({
     const id = this.data.booking.id
     wx.showModal({
       title: '重新预约',
-      content: '将基于该客户信息创建一条新预约记录',
-      confirmText: '确定',
+      content: '将带入客户资料，请在首页重新选择日期和时段后提交',
+      confirmText: '去选择',
       cancelText: '取消',
       success: (res) => {
         if (res.confirm) {
           const app = getApp()
-          app.rebook(id, (newId) => {
-            if (newId) {
-              wx.showToast({ title: '已创建新预约', icon: 'success' })
-              app.globalData._needRefresh = true
-              this._refreshBooking()
-            }
+          app.rebook(id, (draft) => {
+            if (draft) wx.switchTab({ url: '/pages/index/index' })
           })
         }
       }
@@ -562,11 +558,5 @@ Page({
 
   stop() {
     // 用于 catchtouchmove，阻止 QR 弹窗滚动穿透到页面
-  },
-
-  simCheckIn() {
-    const id = this.data.booking.id
-    this.setData({ showQRModal: false })
-    wx.navigateTo({ url: '/pages/checkin/guest/guest?id=' + id })
   }
 })

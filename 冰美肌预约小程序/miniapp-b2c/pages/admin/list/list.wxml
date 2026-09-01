@@ -88,9 +88,5 @@
     <view class="card-rebook-bar" wx:if="{{item._status === 'cancelled'}}" catchtap="onRebookTap" data-id="{{item.id}}">
       <text class="rebook-btn-text">🔄 重新预约</text>
     </view>
-    <!-- 测试签到（模拟顾客扫码） -->
-    <view class="card-test-bar" catchtap="simulateCheckIn" data-id="{{item.id}}">
-      <text class="test-btn-text">🧪 模拟顾客扫码签到</text>
-    </view>
   </view>
 </view>

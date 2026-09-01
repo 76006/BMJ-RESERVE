@@ -17,6 +17,11 @@ Page({
   },
 
   onShow() {
+    if (!getApp().globalData.isAdmin) {
+      wx.showToast({ title: '仅管理员可查看', icon: 'none' })
+      wx.navigateBack()
+      return
+    }
     this.loadData()
   },
 
@@ -134,9 +139,5 @@ Page({
   _fmtDate(d) {
     const pad = n => String(n).padStart(2, '0')
     return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`
-  },
-
-  goTestPanel() {
-    wx.navigateTo({ url: '/pages/admin/test/test' })
   }
 })

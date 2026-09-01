@@ -167,10 +167,5 @@ Page({
     wx.removeStorageSync('_checkinCodeFileID')
     this.setData({ checkinCodeReady: false, checkinCodeUrl: '', checkinCodeFileID: '' })
     wx.showToast({ title: '二维码已过期，请重新生成', icon: 'none' })
-  },
-
-  // 模拟扫码签到（小程序发布前测试用）
-  simulateCheckin() {
-    wx.navigateTo({ url: '/pages/checkin/guest/guest' })
   }
 })

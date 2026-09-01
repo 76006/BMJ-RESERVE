@@ -9,6 +9,17 @@ Page({
   },
 
   onLoad() {
+    const sys = wx.getSystemInfoSync()
+    const isDevtools = sys.platform === 'devtools' || /^Windows|Mac/.test(sys.system || '')
+    if (!isDevtools) {
+      wx.showModal({
+        title: '页面不可用',
+        content: '模拟测试仅限微信开发者工具使用',
+        showCancel: false,
+        complete: () => wx.navigateBack()
+      })
+      return
+    }
     this._log('测试面板已启动')
   },
 
@@ -91,18 +102,6 @@ Page({
       app.globalData.bookings.unshift(booking)
       app._saveLocal()
       app._save()
-
-      // 同步云数据库
-      const db = app.globalData.db
-      if (db) {
-        db.collection('bookings').add({ data: booking })
-          .then(res => {
-            booking._cloudId = res._id
-            console.log('[测试面板] 云端新增:', res._id)
-            app._saveLocal()
-          })
-          .catch(err => { console.warn('[测试面板] 云端新增失败:', err) })
-      }
 
       wx.hideLoading()
       self.setData({ testBooking: booking, step: 'full' })

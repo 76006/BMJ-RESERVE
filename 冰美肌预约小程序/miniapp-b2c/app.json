@@ -15,8 +15,7 @@
     "pages/checkin/guest/guest",
     "pages/admin/managers/managers",
     "pages/admin/feedbacks/feedbacks",
-    "pages/admin/export/export",
-    "pages/admin/test/test"
+    "pages/admin/export/export"
   ],
   "window": {
     "navigationBarBackgroundColor": "#6B7280",

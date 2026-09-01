@@ -261,17 +261,14 @@ Page({
     const { id } = e.currentTarget.dataset
     wx.showModal({
       title: '重新预约',
-      content: '将基于该客户信息创建一条新预约记录',
-      confirmText: '确定',
+      content: '将带入客户资料，请在首页重新选择日期和时段后提交',
+      confirmText: '去选择',
       cancelText: '取消',
       success: (res) => {
         if (res.confirm) {
           const app = getApp()
-          app.rebook(id, (newId) => {
-            if (newId) {
-              wx.showToast({ title: '已创建新预约，等待确认', icon: 'success' })
-              this._loadUserData()
-            }
+          app.rebook(id, (draft) => {
+            if (draft) wx.switchTab({ url: '/pages/index/index' })
           })
         }
       }

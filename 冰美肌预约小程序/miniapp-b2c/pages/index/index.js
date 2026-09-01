@@ -75,13 +75,14 @@ Page({
     }
     this.setData({ minVisitDate: today })
     // 暖启动：小程序已在后台时扫码只触发 onShow，需在这里也检查跳转
-    this._checkCheckinRedirect()
+    const redirectingToCheckin = this._checkCheckinRedirect()
+    if (!redirectingToCheckin) this._loadRebookDraft()
   },
 
   // 门店签到码扫描后跳转顾客签到页（onLoad 与 onShow 共用）
   _checkCheckinRedirect() {
     const app = getApp()
-    if (!app.globalData._launchCheckin) return
+    if (!app.globalData._launchCheckin) return false
     app.globalData._launchCheckin = false
     const bookingId = app.globalData._checkinBookingId
     app.globalData._checkinBookingId = null
@@ -90,6 +91,50 @@ Page({
     } else {
       wx.navigateTo({ url: '/pages/checkin/guest/guest' })
     }
+    return true
+  },
+
+  // 重新预约只带入客户资料，日期与时段必须由用户重新选择并再次提交。
+  _loadRebookDraft() {
+    const draft = wx.getStorageSync('_rebookDraft')
+    if (!draft) return
+    wx.removeStorageSync('_rebookDraft')
+
+    const app = getApp()
+    const profile = app.getUserProfile ? (app.getUserProfile() || {}) : {}
+    const verifiedPhone = profile.phone || wx.getStorageSync('_userPhone') || ''
+    const isPhoneVerified = !!app.globalData.isAdmin || (
+      !!wx.getStorageSync('_phoneVerified') && verifiedPhone === (draft.phone || '')
+    )
+    const genderIdx = Math.max(0, genderOptions.indexOf(draft.gender || '男'))
+    this._rebookSource = {
+      channel: draft.channel || 'direct',
+      trainerId: draft.trainerId || '',
+      trainerName: draft.trainerName || ''
+    }
+    const channelMap = { medical: '医疗渠道', beauty: '生美渠道' }
+    this.setData({
+      name: draft.name || '',
+      genderIdx,
+      genderText: genderOptions[genderIdx],
+      age: draft.age || '',
+      idCard: draft.idCard || '',
+      phone: draft.phone || '',
+      phoneVerified: isPhoneVerified,
+      medicalHistory: draft.medicalHistory || '',
+      needs: draft.needs || '',
+      visitDate: '',
+      visitTimeIdx: -1,
+      visitTimeText: '',
+      timeSlots: TIME_SLOTS,
+      slotStatus: [],
+      allSlotStatus: [],
+      agreedPrivacy: false,
+      channelBadge: channelMap[draft.channel] || (draft.channel === 'direct' ? '' : draft.channel || ''),
+      trainerBadge: draft.trainerName || ''
+    })
+    wx.showToast({ title: '资料已带入，请重新选择日期和时段', icon: 'none', duration: 2200 })
+    setTimeout(() => wx.pageScrollTo({ selector: '#book', duration: 300 }), 100)
   },
 
   scrollToBook() {
@@ -295,16 +340,21 @@ Page({
       visitTime: this.data.visitTimeText,
       medicalHistory: this.data.medicalHistory.trim(),
       needs: this.data.needs.trim(),
-      phone: this.data.phone.trim()
+      phone: this.data.phone.trim(),
+      agreedPrivacy: this.data.agreedPrivacy,
+      channel: this._rebookSource ? this._rebookSource.channel : (app.globalData.channel || 'direct'),
+      trainerId: this._rebookSource ? this._rebookSource.trainerId : (app.globalData.trainerId || ''),
+      trainerName: this._rebookSource ? this._rebookSource.trainerName : (app.globalData.trainerName || '')
     }
 
-    app.addBooking(form, (booking) => {
+    app.addBooking(form, (booking, error) => {
       wx.hideLoading()
       this._submitting = false
       if (booking) {
         this.requestSubscription(booking.id)
       } else {
-        wx.showToast({ title: '提交失败，请重试', icon: 'none' })
+        wx.showToast({ title: error || '提交失败，请重试', icon: 'none' })
+        this.filterAvailableSlots(this.data.visitDate)
       }
     })
   },
@@ -335,6 +385,7 @@ Page({
   },
 
   resetForm() {
+    this._rebookSource = null
     this.setData({
       name: '', genderIdx: 0, genderText: '男', age: '', idCard: '',
       visitDate: '', visitTimeIdx: -1, visitTimeText: '',

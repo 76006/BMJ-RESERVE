@@ -518,7 +518,6 @@
     顾客使用微信扫描上方小程序码，将直接进入本预约的知情同意书流程
   </view>
   <view class="qr-modal-actions">
-    <button class="qr-modal-btn sim" bindtap="simCheckIn">模拟扫码签到</button>
     <button class="qr-modal-btn close" bindtap="closeQRModal">关闭</button>
   </view>
 </view>

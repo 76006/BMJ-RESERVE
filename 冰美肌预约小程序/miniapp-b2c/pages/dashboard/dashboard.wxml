@@ -90,11 +90,4 @@
   </view>
 
   <view class="bottom-safe"></view>
-
-  <!-- 测试面板入口 -->
-  <view class="test-entry" bindtap="goTestPanel">
-    <text class="test-entry-icon">🧪</text>
-    <text class="test-entry-text">模拟测试面板</text>
-    <text class="test-entry-arrow">›</text>
-  </view>
 </view>

@@ -151,38 +151,18 @@ Page({
     wx.navigateTo({ url: '/pages/admin/qrconfig/qrconfig' })
   },
 
-  // 模拟顾客扫码签到（测试用）
-  simulateCheckIn(e) {
-    const id = e.currentTarget.dataset.id
-    if (!id) return
-    wx.showModal({
-      title: "模拟签到",
-      content: "将以该预约ID跳转到顾客签到页，模拟顾客扫码后看到的界面。",
-      confirmText: "开始模拟",
-      cancelText: "取消",
-      success: (res) => {
-        if (res.confirm) {
-          wx.navigateTo({ url: `/pages/checkin/guest/guest?id=${id}` })
-        }
-      }
-    })
-  },
-
   onRebookTap(e) {
     const id = e.currentTarget.dataset.id
     wx.showModal({
       title: "重新预约",
-      content: "将基于该客户信息创建一条新预约记录",
-      confirmText: "确定",
+      content: "将带入客户资料，请在首页重新选择日期和时段后提交",
+      confirmText: "去选择",
       cancelText: "取消",
       success: (res) => {
         if (res.confirm) {
           const app = getApp()
-          app.rebook(id, (newId) => {
-            if (newId) {
-              wx.showToast({ title: "已创建新预约", icon: "success" })
-              this.loadData()
-            }
+          app.rebook(id, (draft) => {
+            if (draft) wx.switchTab({ url: '/pages/index/index' })
           })
         }
       }

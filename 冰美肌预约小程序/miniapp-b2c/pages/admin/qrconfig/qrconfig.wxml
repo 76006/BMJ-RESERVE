@@ -91,16 +91,4 @@
     </button>
   </view>
 
-  <!-- ===== 测试入口：模拟扫码签到（备案期间无法外部扫码） ===== -->
-  <view class="divider"></view>
-  <view class="info-card" style="margin-top: 0;">
-    <view class="info-card-title">🧪 模拟扫码签到</view>
-    <view class="info-card-body">
-      <text class="p">备案期间小程序码扫描会提示「尚未发布」。点击下方按钮可模拟顾客扫码签到的完整流程。</text>
-    </view>
-  </view>
-  <view class="qrcode-card">
-    <button class="sim-checkin-btn" bindtap="simulateCheckin">进入签到流程（模拟扫码）</button>
-  </view>
-
 </view>
