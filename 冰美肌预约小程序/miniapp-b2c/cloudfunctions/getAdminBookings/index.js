@@ -9,10 +9,24 @@ const cloud = require('wx-server-sdk')
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 const db = cloud.database()
 
+async function isAdmin(openId) {
+  if (!openId) return false
+  const res = await db.collection('admins')
+    .where({ openId, active: true })
+    .limit(1)
+    .get()
+  return !!(res.data && res.data[0])
+}
+
 exports.main = async (event) => {
-  const limit = Math.min(event.limit || 200, 500)
+  event = event || {}
+  const openId = cloud.getWXContext().OPENID
+  const limit = Math.min(Math.max(Number(event.limit) || 200, 1), 500)
 
   try {
+    if (!(await isAdmin(openId))) {
+      return { success: false, data: [], error: '无管理员权限' }
+    }
     const res = await db.collection('bookings').limit(limit).get()
     const data = res.data || []
 

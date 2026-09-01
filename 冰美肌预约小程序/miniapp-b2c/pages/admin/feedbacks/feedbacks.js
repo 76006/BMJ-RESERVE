@@ -105,18 +105,22 @@ Page({
     var app = getApp()
     var bookings = app.globalData.bookings || []
 
-    // 优先从云数据库加载，降级到本地
-    var db = app.globalData.db
-    if (db) {
+    // 管理端通过带身份校验的云函数读取，客户端不再直连全部问卷。
+    if (wx.cloud) {
       var timer = setTimeout(function () {
         console.warn('[feedback] 查询超时，降级到本地数据')
         var localFbs = wx.getStorageSync('feedbacks') || []
         self._processData(localFbs, bookings)
       }, 4500)
-      db.collection('feedbacks').where({}).limit(200).get()
+      wx.cloud.callFunction({
+        name: 'getAdminFeedbacks',
+        data: { limit: 200 }
+      })
         .then(function (res) {
           clearTimeout(timer)
-          var cloudFbs = res.data || []
+          var result = res.result || {}
+          if (!result.success) throw new Error(result.error || '无管理员权限')
+          var cloudFbs = result.data || []
           // 合并本地数据（去重）
           var localFbs = wx.getStorageSync('feedbacks') || []
           var merged = self._mergeFeedbacks(cloudFbs, localFbs)

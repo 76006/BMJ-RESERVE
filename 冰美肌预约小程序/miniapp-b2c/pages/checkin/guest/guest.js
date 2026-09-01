@@ -117,26 +117,19 @@ Page({
     })
   },
 
-  // 云端查询：phone + visitDate + 未签到 + 状态为已确认/已到店
-  // 仅用两个等值条件（phone + visitDate），避免复合索引依赖；状态/签到在服务端过滤后于客户端再筛。
+  // 云端查询：服务端只使用当前微信已验证手机号，不信任客户端传入手机号。
   _fetchTodayByPhone(phone, today) {
-    const app = getApp()
-    const db = app.globalData.db
-    if (!db) return Promise.resolve([])
     if (!phone) return Promise.resolve([])
-
-    return db.collection('bookings')
-      .where({ phone: phone, visitDate: today })
-      .limit(50)
-      .get()
-      .then(function (res) {
-        return (res.data || []).filter(function (b) {
-          if (b.checkInAt) return false
-          return b._status === 'confirmed' || b._status === 'visited'
-        })
+    return wx.cloud.callFunction({
+      name: 'bookingService',
+      data: { action: 'listToday', visitDate: today }
+    }).then(function (res) {
+        const result = res.result || {}
+        if (!result.success) throw new Error(result.error || '查询失败')
+        return result.data || []
       })
       .catch(function (err) {
-        console.warn('[签到] 按手机号查询今日预约失败:', err)
+        console.warn('[签到] 查询本人今日预约失败:', err)
         return []
       })
   },

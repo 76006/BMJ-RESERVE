@@ -2,9 +2,23 @@
 // 部署后通过 dashboard 的「生成门店签到码」按钮触发
 const cloud = require('wx-server-sdk')
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
+const db = cloud.database()
+
+async function isAdmin(openId) {
+  if (!openId) return false
+  const res = await db.collection('admins')
+    .where({ openId, active: true })
+    .limit(1)
+    .get()
+  return !!(res.data && res.data[0])
+}
 
 exports.main = async (event, context) => {
-  console.log('[genCheckinCode] 开始生成签到码, event:', JSON.stringify(event))
+  const openId = cloud.getWXContext().OPENID
+  if (!(await isAdmin(openId))) {
+    return { success: false, error: '无管理员权限' }
+  }
+  console.log('[genCheckinCode] 管理员请求生成签到码')
 
   try {
     // 调用微信获取无限制数量的小程序码

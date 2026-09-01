@@ -86,13 +86,8 @@ App({
     // 读取扫码scene参数（小程序码带参进入）
     this._applyScanScene(options)
 
-    // 从 localStorage 恢复管理员状态
-    if (wx.getStorageSync('_isAdmin')) {
-      this.globalData.isAdmin = true
-    }
-
     // 数据库集合初始化 + 加载预约记录（在 _initCollections 中触发）
-    // 获取 openId 并检查管理员白名单（优先用本地缓存，避免启动时超时）
+    // 管理员身份必须由云函数按当前 OPENID 重新确认，不能信任本地缓存
     this._checkAdminByOpenId()
   },
 
@@ -111,10 +106,6 @@ App({
       this.globalData.channel = q.channel || 'direct'
       this.globalData.trainerId = q.trainer || ''
       this.globalData.trainerName = q.name ? decodeURIComponent(q.name) : ''
-    }
-    // 管理员认证扫码
-    if (q.admin && q.token) {
-      this._handleAdminScan(q.token)
     }
     // 顾客签到扫码（门店签到码 scene=checkin=true）
     if (q.checkin || q.scene === 'checkin') {
@@ -136,26 +127,8 @@ App({
   // 云数据库加载（带本地缓存降级）
   // ===========================================
   _initCollections() {
-    // 开发工具/真机调试：跳过 setupDB（云端集合已建好），直接走本地/云端数据
-    const sys = wx.getSystemInfoSync()
-    const isDevtools = sys.platform === 'devtools' || /^Windows|Mac/.test(sys.system || '')
-
-    if (isDevtools || wx.getStorageSync('_dbInited_v2')) {
-      this._loadBookingsFromCloud()
-      return
-    }
-    wx.cloud.callFunction({
-      name: 'setupDB',
-      success: res => {
-        console.log('[云开发] 数据库集合初始化:', JSON.stringify(res.result))
-        wx.setStorageSync('_dbInited_v2', true)
-        this._loadBookingsFromCloud()
-      },
-      fail: err => {
-        console.warn('[云开发] setupDB失败，仍尝试加载数据:', err)
-        this._loadBookingsFromCloud()
-      }
-    })
+    // 集合已在阶段0创建，不允许客户端启动时调用高权限初始化函数
+    this._loadBookingsFromCloud()
   },
 
   _loadBookingsFromCloud() {
@@ -199,6 +172,12 @@ App({
     }).then(res => {
       clearTimeout(timer)
       var result = res.result || {}
+      if (!result.success) {
+        console.warn('[云开发] 管理员身份失效:', result.error || '无权限')
+        self.logoutAdmin()
+        self._loadOwnBookingsOnly()
+        return
+      }
       var data = result.data || []
       data.sort(function(a, b) {
         var ta = a.createdAt || 0
@@ -292,9 +271,12 @@ App({
     var timer = setTimeout(() => {
       console.warn('[迁移] 重新加载超时，使用本地数据')
     }, 4500)
-    var query = openid
-      ? db.collection('bookings').where({ _openid: openid }).limit(200).get()
-      : db.collection('bookings').limit(200).get()
+    if (!openid) {
+      clearTimeout(timer)
+      console.warn('[迁移] 缺少 openId，停止重新读取')
+      return
+    }
+    var query = db.collection('bookings').where({ _openid: openid }).limit(200).get()
     query.then(res => {
       clearTimeout(timer)
       var data = res.data || []
@@ -410,28 +392,15 @@ App({
   // ===========================================
   // 统一更新云数据库（通过业务id查找并更新）
   _updateCloud(bookingId, updateData) {
-    const db = this.globalData.db
-    if (!db) return
-    const booking = this._find(bookingId)
-    if (!booking) return
-
-    if (booking._cloudId) {
-      // 已知云端文档ID，直接更新
-      db.collection('bookings').doc(booking._cloudId).update({ data: updateData })
-        .then(() => console.log('[云开发] 更新成功:', bookingId))
-        .catch(err => console.warn('[云开发] 更新失败:', err))
-    } else {
-      // 查找云端文档
-      db.collection('bookings').where({ id: bookingId }).limit(1).get()
-        .then(res => {
-          if (res.data && res.data[0]) {
-            booking._cloudId = res.data[0]._id
-            return db.collection('bookings').doc(res.data[0]._id).update({ data: updateData })
-          }
-        })
-        .then(() => console.log('[云开发] 更新成功:', bookingId))
-        .catch(err => console.warn('[云开发] 更新失败:', err))
-    }
+    if (!bookingId || !updateData) return
+    wx.cloud.callFunction({
+      name: 'bookingService',
+      data: { action: 'update', bookingId, data: updateData }
+    }).then(res => {
+      const result = res.result || {}
+      if (!result.success) throw new Error(result.error || '更新失败')
+      console.log('[云开发] 受控更新成功:', bookingId)
+    }).catch(err => console.warn('[云开发] 受控更新失败:', err && err.message ? err.message : err))
   },
 
   // 操作师确认预约
@@ -507,24 +476,15 @@ App({
 
       if (isDevtools) { buildFromLocal(); return }
 
-      const db = self.globalData.db
-      if (!db) { buildFromLocal(); return }
-
-      const _ = self.globalData._
-      if (!_) { buildFromLocal(); return }
-
-      db.collection('bookings')
-        .where({
-          visitDate: date,
-          _status: _.nin(['cancelled', 'no_show', 'rejected'])
-        })
-        .field({ visitTime: true, name: true, _status: true })
-        .limit(200)
-        .get()
+      wx.cloud.callFunction({
+        name: 'checkSlot',
+        data: { visitDate: date }
+      })
         .then(res => {
+          const result = res.result || {}
           const map = {}
-          ;(res.data || []).forEach(b => {
-            map[b.visitTime] = { name: b.name || '', status: b._status || '' }
+          ;(result.occupiedSlots || []).forEach(visitTime => {
+            map[visitTime] = { status: 'booked' }
           })
           resolve(map)
         })
@@ -608,14 +568,12 @@ App({
   },
 
   // ===========================================
-  // 管理员认证（openId 白名单 + 旧密码方式降级）
+  // 管理员认证（服务端 OPENID 白名单）
   // ===========================================
-  // 启动时自动获取 openId 并检查管理员身份（优先用本地缓存，避免启动超时）
+  // 真机每次启动都由云函数重新确认；本地缓存只用于开发工具界面预览。
   _checkAdminByOpenId() {
-    // 开发工具环境：跳过云端查询，避免超时干扰
     const sys = wx.getSystemInfoSync()
     if (sys.platform === 'devtools' || /^Windows|Mac/.test(sys.system || '')) {
-      // 仅在本地已缓存管理员状态时恢复
       if (wx.getStorageSync('_isAdmin')) {
         this.globalData.isAdmin = true
         this.globalData.adminName = wx.getStorageSync('_adminName') || '\u7ba1\u7406\u5458'
@@ -623,47 +581,26 @@ App({
       }
       return
     }
-    // 已登录过的管理员直接恢复状态，不查云端
-    if (wx.getStorageSync('_isAdmin')) {
-      this.globalData.isAdmin = true
-      this.globalData.adminName = wx.getStorageSync('_adminName') || '\u7ba1\u7406\u5458'
-      this.globalData.adminRole = wx.getStorageSync('_adminRole') || 'staff'
-      this.globalData.adminPhone = wx.getStorageSync('_adminPhone') || ''
-      return
-    }
     var self = this
-    this.getOpenId(function (openid) {
-      if (!openid) {
-        console.warn('[管理员] 获取 openId 失败，降级到本地认证')
-        return
+    wx.cloud.callFunction({
+      name: 'loginByPhone',
+      data: { action: 'check' }
+    }).then(function (res) {
+      const result = res.result || {}
+      if (result.ok && result.isAdmin) {
+        self._setAdminState(result)
+      } else {
+        self.logoutAdmin()
       }
-      self._recordVisitor(openid)
-      var db = self.globalData.db
-      if (!db) return
-      // 云端查询：增加超时保护，避免因缺少索引导致启动卡死
-      var timer = setTimeout(function () {
-        console.warn('[管理员] 白名单查询超时（可能缺少索引），跳过')
-      }, 4500)
-      db.collection('admins').where({ openId: openid, active: true }).limit(1).get()
-        .then(function (res) {
-          clearTimeout(timer)
-          if (res.data && res.data.length > 0) {
-            var admin = res.data[0]
-            self._setAdminState(admin)
-          } else {
-            // openId 未匹配 → 尝试按手机号匹配（新添加的操作师首次登录）
-            self._tryLoginByPhone(db, openid)
-          }
-        })
-        .catch(function (err) {
-          clearTimeout(timer)
-          console.warn('[管理员] 白名单查询失败（索引缺失或超时）:', err && err.message ? err.message : err)
-        })
+    }).catch(function (err) {
+      self.logoutAdmin()
+      console.warn('[管理员] 云端身份校验失败:', err && err.message ? err.message : err)
     })
   },
 
   // 设置管理员状态（统一入口）
   _setAdminState(admin) {
+    const wasAdmin = this.globalData.isAdmin
     this.globalData.isAdmin = true
     this.globalData.adminName = admin.name || '\u7ba1\u7406\u5458'
     this.globalData.adminRole = admin.role || 'staff'
@@ -672,156 +609,13 @@ App({
     wx.setStorageSync('_adminName', admin.name || '\u7ba1\u7406\u5458')
     wx.setStorageSync('_adminRole', admin.role || 'staff')
     wx.setStorageSync('_adminPhone', admin.phone || '')
-    console.log('[管理员] 已认证:', admin.name, admin.role, admin.phone)
+    console.log('[管理员] 云端身份已确认:', admin.role)
 
     // 新认证的管理员：重新加载全部预约（之前只加载了自己的）
-    if (this.globalData._cloudReady && this.globalData.bookings.length < 50) {
+    if (!wasAdmin && this.globalData._cloudReady) {
       console.log('[管理员] 重新加载全部预约记录')
       this._loadAllBookingsAsAdmin()
     }
-  },
-
-  // 按手机号匹配并绑定 openId（新添加的人员首次登录时自动绑定）
-  _tryLoginByPhone(db, openid, callback) {
-    var userPhone = wx.getStorageSync('_userPhone') || ''
-    if (!userPhone) { if (callback) callback(false); return }
-    var self = this
-    db.collection('admins').where({ phone: userPhone, active: true }).limit(1).get()
-      .then(function (res) {
-        if (res.data && res.data.length > 0) {
-          var admin = res.data[0]
-          // 自动绑定 openId（如果尚未绑定或变更了设备）
-          db.collection('admins').doc(admin._id).update({
-            data: { openId: openid, updatedAt: new Date().toISOString() }
-          }).then(function () {
-            console.log('[管理员] 手机号匹配成功，已自动绑定 openId:', admin.name, admin.role)
-            self._setAdminState(admin)
-            if (callback) callback(true)
-          }).catch(function (err) {
-            console.warn('[管理员] openId 绑定失败，但仍可临时认证:', err && err.message)
-            self._setAdminState(admin)
-            if (callback) callback(true)
-          })
-        } else {
-          console.log('[管理员] 手机号 ' + userPhone + ' 未在白名单中')
-          if (callback) callback(false)
-        }
-      })
-      .catch(function (err) {
-        console.warn('[管理员] 手机号查询失败:', err && err.message ? err.message : err)
-        if (callback) callback(false)
-      })
-  },
-
-  // 记录访客到 users 集合（首次写入，老访客更新 lastVisit）
-  _recordVisitor(openid) {
-    const db = this.globalData.db
-    if (!db) return
-    var timer = setTimeout(function () {
-      console.warn('[访客] 记录查询超时（可能缺少索引），跳过')
-    }, 4500)
-    db.collection('users').where({ openId: openid }).limit(1).get()
-      .then(res => {
-        clearTimeout(timer)
-        if (res.data && res.data.length === 0) {
-          db.collection('users').add({
-            data: {
-              openId: openid,
-              firstVisit: new Date().toISOString(),
-              lastVisit: new Date().toISOString(),
-              visitCount: 1
-            }
-          }).then(() => console.log('[访客] 已记录新访客'))
-        } else if (res.data[0]) {
-          const doc = res.data[0]
-          db.collection('users').doc(doc._id).update({
-            data: {
-              lastVisit: new Date().toISOString(),
-              visitCount: (doc.visitCount || 0) + 1
-            }
-          })
-        }
-      })
-      .catch(err => {
-        clearTimeout(timer)
-        console.warn('[访客] 记录失败（索引缺失或超时）:', err && err.message ? err.message : err)
-      })
-  },
-
-  // 获取所有访客列表（供管理员管理页面使用）
-  getAllUsers(callback) {
-    const db = this.globalData.db
-    if (!db) { callback([]); return }
-    var timer = setTimeout(function () {
-      console.warn('[getAllUsers] 查询超时（users 缺少索引或数据量大）')
-      callback([])
-    }, 4500)
-    db.collection('users').where({}).limit(200).get()
-      .then(res => {
-        clearTimeout(timer)
-        var data = res.data || []
-        data.sort(function(a, b) {
-          var ta = (a.lastVisit || a.firstVisit || '').toString()
-          var tb = (b.lastVisit || b.firstVisit || '').toString()
-          return tb.localeCompare(ta)
-        })
-        callback(data)
-      })
-      .catch(function (err) {
-        clearTimeout(timer)
-        console.warn('[getAllUsers] 读取失败:', err && err.message ? err.message : err)
-        callback([])
-      })
-  },
-
-  // 获取所有管理员列表
-  getAllAdmins(callback) {
-    const db = this.globalData.db
-    if (!db) { callback([]); return }
-    var timer = setTimeout(function () {
-      console.warn('[getAllAdmins] 查询超时（admins 缺少索引或数据量大）')
-      callback([])
-    }, 4500)
-    db.collection('admins').where({}).limit(200).get()
-      .then(res => {
-        clearTimeout(timer)
-        var data = res.data || []
-        data.sort(function(a, b) {
-          var ta = (a.createdAt || '').toString()
-          var tb = (b.createdAt || '').toString()
-          return tb.localeCompare(ta)
-        })
-        callback(data)
-      })
-      .catch(function (err) {
-        clearTimeout(timer)
-        console.warn('[getAllAdmins] 读取失败:', err && err.message ? err.message : err)
-        callback([])
-      })
-  },
-
-  // 移除管理员（设为 inactive）
-  removeAdmin(openId, callback) {
-    const db = this.globalData.db
-    if (!db) { callback(false); return }
-    db.collection('admins').where({ openId: openId }).limit(1).get()
-      .then(res => {
-        if (res.data && res.data[0]) {
-          db.collection('admins').doc(res.data[0]._id).update({
-            data: { active: false }
-          }).then(() => callback(true))
-            .catch(function (err) {
-              console.warn('[removeAdmin] 更新失败:', err && err.message ? err.message : err)
-              callback(false)
-            })
-        } else {
-          callback(false)
-        }
-      })
-      .catch(function (err) {
-        console.warn('[removeAdmin] 查询失败:', err && err.message ? err.message : err)
-        callback(false)
-      })
   },
 
   // 退出管理员登录
@@ -835,104 +629,6 @@ App({
     wx.removeStorageSync('_adminRole')
     wx.removeStorageSync('_adminPhone')
     console.log('[管理员] 已退出登录')
-  },
-
-  /**
-   * 手机号登录 — 设置管理员状态
-   * @param {Object} result - 云函数返回 {role, name, phone}
-   */
-  setAdminByPhone(result) {
-    if (!result || !result.phone) return
-
-    // 保存用户手机号（无论是否管理员）
-    wx.setStorageSync('_phoneVerified', true)
-    wx.setStorageSync('_userPhone', result.phone)
-
-    if (result.role === 'staff' || result.role === 'superadmin') {
-      this.globalData.isAdmin = true
-      this.globalData.adminName = result.name || '管理员'
-      this.globalData.adminRole = result.role
-      this.globalData.adminPhone = result.phone
-      wx.setStorageSync('_isAdmin', true)
-      wx.setStorageSync('_adminName', result.name || '管理员')
-      wx.setStorageSync('_adminRole', result.role)
-      wx.setStorageSync('_adminPhone', result.phone)
-      console.log(`[手机号登录] 管理员: ${result.name} (${result.role}) phone=${result.phone}`)
-    } else {
-      // 普通用户，更新用户画像
-      const profile = this.getUserProfile()
-      if (profile) {
-        profile.phone = result.phone
-        this.saveUserProfile(profile)
-      } else {
-        this.saveUserProfile({ name: '', gender: '', phone: result.phone })
-      }
-      console.log(`[手机号登录] 普通用户 phone=${result.phone}`)
-    }
-  },
-
-  // 手动添加管理员到白名单（首次设置用）
-  addAdmin(openId, name, role) {
-    const db = this.globalData.db
-    if (!db) return
-    db.collection('admins').add({
-      data: {
-        openId: openId,
-        name: name || '管理员',
-        role: role || 'staff',   // superadmin / staff
-        active: true,
-        createdAt: new Date().toISOString()
-      }
-    }).then(res => {
-      console.log('[管理员] 已添加白名单:', name, '角色:', role, res._id)
-    }).catch(err => {
-      console.warn('[管理员] 添加失败:', err)
-    })
-  },
-
-  // 旧密码认证（降级备用）
-  _handleAdminScan(token) {
-    const admins = wx.getStorageSync('_admins') || []
-    const match = admins.find(a => a.token === token)
-    if (match) {
-      this.globalData.isAdmin = true
-      wx.setStorageSync('_isAdmin', true)
-      wx.setStorageSync('_adminName', match.name || '')
-      wx.showToast({ title: '管理员认证成功', icon: 'success', duration: 1500 })
-    } else {
-      // token不匹配，提示输入密码
-      wx.showModal({
-        title: '管理员认证',
-        editable: true,
-        placeholderText: '请输入管理员密码',
-        success: (res) => {
-          if (res.confirm && res.content) {
-            const admins2 = wx.getStorageSync('_admins') || []
-            const m2 = admins2.find(a => this._adminHash(res.content) === token)
-            if (m2) {
-              this.globalData.isAdmin = true
-              wx.setStorageSync('_isAdmin', true)
-              wx.setStorageSync('_adminName', m2.name || '')
-              wx.showToast({ title: '认证成功', icon: 'success' })
-            }
-          }
-        }
-      })
-    }
-  },
-
-  // 生成管理员token（供qrconfig使用）
-  generateAdminToken(password, name) {
-    return this._adminHash(password + '_' + name)
-  },
-
-  _adminHash(s) {
-    let h = 0
-    for (let i = 0; i < s.length; i++) {
-      h = ((h << 5) - h) + s.charCodeAt(i)
-      h = h & h
-    }
-    return 'a_' + Math.abs(h).toString(36)
   },
 
   // ===========================================

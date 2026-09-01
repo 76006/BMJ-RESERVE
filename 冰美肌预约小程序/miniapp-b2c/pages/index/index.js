@@ -107,12 +107,12 @@ Page({
         wx.showToast({ title: '授权成功', icon: 'success' })
       } else {
         console.error('[getPhoneNumber] 解析失败:', result)
-        wx.showToast({ title: '获取失败，请手动填写', icon: 'none' })
+        wx.showToast({ title: '获取失败，请重新授权', icon: 'none' })
       }
     }).catch(err => {
       wx.hideLoading()
       console.error('[getPhoneNumber] 云函数调用失败:', err)
-      wx.showToast({ title: '授权失败，请手动填写', icon: 'none' })
+      wx.showToast({ title: '授权失败，请重新尝试', icon: 'none' })
     })
   },
 

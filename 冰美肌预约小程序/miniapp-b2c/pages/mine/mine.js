@@ -15,8 +15,6 @@ Page({
     previewRole: '',  // ''=实际角色 / 'user' / 'staff' / 'admin'
     isLoggedIn: false,  // 是否已手机号登录
     isDevtools: false,  // 是否开发工具环境
-    operatorPhone: '15571892089',
-    testPhone: '15821182307',  // 操作师手机号
     // 联系客服
     servicePhone: '19117352642',                  // 电话咨询号码
     serviceQrImage: '/images/service-qr.png',     // 企业微信客服二维码（请替换为后台下载的真实二维码）
@@ -60,7 +58,8 @@ Page({
       }
     }
 
-    const isAdmin = app.globalData.isAdmin || wx.getStorageSync('_isAdmin')
+    // 真机只信任 app 中已经由云函数确认的状态；开发工具允许本地视图预览。
+    const isAdmin = app.globalData.isAdmin || (isDevtools && wx.getStorageSync('_isAdmin'))
     const isLoggedIn = !!wx.getStorageSync('_phoneVerified')
 
     this.setData({
@@ -300,94 +299,45 @@ Page({
   // ===========================================
   // 身份认证
   // ===========================================
-  goLogin() {
-    wx.navigateTo({ url: '/pages/auth/phone/phone' })
-  },
-
   // 手机号登录（微信一键授权）
   onLogin(e) {
     var self = this
-
-    // 方式1：新 API code 解码
-    if (e.detail && e.detail.code) {
-      wx.showLoading({ title: '登录中...' })
-      wx.cloud.callFunction({
-        name: 'getPhoneNumber',
-        data: { code: e.detail.code }
-      }).then(function (res) {
-        wx.hideLoading()
-        var result = res.result || {}
-        if (result.phone) {
-          self._handlePhoneLogin(result.phone)
-        } else {
-          console.warn('[登录] getPhoneNumber 解密失败:', result.error)
-          self._fallbackPhoneInput()
-        }
-      }).catch(function (err) {
-        wx.hideLoading()
-        console.warn('[登录] getPhoneNumber 云函数调用失败:', err)
-        self._fallbackPhoneInput()
-      })
+    const detail = e.detail || {}
+    if (!detail.code && !detail.cloudID) {
+      wx.showToast({ title: '请使用微信手机号授权登录', icon: 'none' })
       return
     }
-
-    // 方式2：旧 API cloudID 解码
-    if (e.detail && e.detail.cloudID) {
-      wx.showLoading({ title: '登录中...' })
-      wx.cloud.callFunction({
-        name: 'loginByPhone',
-        data: { cloudID: e.detail.cloudID }
-      }).then(function (res) {
-        wx.hideLoading()
-        var result = res.result || {}
-        if (result.phone) {
-          self._handlePhoneLogin(result.phone)
-          // loginByPhone 已在云端完成角色识别
-          if (result.role === 'staff' || result.role === 'superadmin' || result.role === 'admin') {
-            var app = getApp()
-            if (!app.globalData.isAdmin) {
-              app.globalData.isAdmin = true
-              app.globalData.adminName = result.name || '工作人员'
-              app.globalData.adminRole = result.role
-              app.globalData.adminPhone = result.phone
-              wx.setStorageSync('_isAdmin', true)
-              wx.setStorageSync('_adminName', result.name || '工作人员')
-              wx.setStorageSync('_adminRole', result.role)
-              wx.setStorageSync('_adminPhone', result.phone)
-              setTimeout(function () {
-                wx.showToast({ title: '已识别为工作人员', icon: 'success' })
-                wx.redirectTo({ url: '/pages/mine/mine' })
-              }, 500)
-            }
-          }
-        } else {
-          self._fallbackPhoneInput()
-        }
-      }).catch(function (err) {
-        wx.hideLoading()
-        console.warn('[登录] loginByPhone 云函数调用失败:', err)
-        self._fallbackPhoneInput()
-      })
-      return
-    }
-
-    // 降级：手动输入
-    self._fallbackPhoneInput()
-  },
-
-  // 降级：手动输入手机号
-  _fallbackPhoneInput() {
-    var self = this
-    wx.showModal({
-      title: '登录',
-      content: '请输入手机号',
-      editable: true,
-      placeholderText: '手机号',
-      success: function (res) {
-        if (res.confirm && res.content) {
-          self._handlePhoneLogin(res.content)
-        }
+    const data = detail.code ? { code: detail.code } : { cloudID: detail.cloudID }
+    wx.showLoading({ title: '登录中...' })
+    wx.cloud.callFunction({ name: 'loginByPhone', data }).then(function (res) {
+      wx.hideLoading()
+      const result = res.result || {}
+      if (!result.ok || !result.phone) {
+        wx.showModal({
+          title: '登录失败',
+          content: result.error || '手机号授权失败，请重新尝试',
+          showCancel: false
+        })
+        return
       }
+      self._handlePhoneLogin(result.phone)
+      const app = getApp()
+      if (result.isAdmin) {
+        app._setAdminState(result)
+        self.setData({
+          isAdmin: true,
+          adminRole: result.role,
+          adminName: result.name || '工作人员'
+        })
+        self._loadAdminData()
+        wx.showToast({ title: '已识别为工作人员', icon: 'success' })
+      } else {
+        wx.showToast({ title: '登录成功', icon: 'success' })
+      }
+    }).catch(function (err) {
+      wx.hideLoading()
+      console.warn('[登录] loginByPhone 云函数调用失败:', err)
+      wx.showToast({ title: '登录失败，请重试', icon: 'none' })
     })
   },
 
@@ -408,32 +358,6 @@ Page({
     } catch (e) { /* silent */ }
     this.setData({ isLoggedIn: true, userPhone: phone })
 
-    // 尝试按手机号匹配管理员/操作师
-    var app = getApp()
-    var self = this
-    if (app._tryLoginByPhone && app.globalData.db && !app.globalData.isAdmin) {
-      app.getOpenId(function (openid) {
-        if (openid) {
-          app._tryLoginByPhone(app.globalData.db, openid, function (isAdmin) {
-            if (isAdmin) {
-              self.setData({
-                isAdmin: true,
-                adminRole: app.globalData.adminRole || 'staff',
-                adminName: app.globalData.adminName || '工作人员'
-              })
-              self._loadAdminData()
-              wx.showToast({ title: '已识别为工作人员', icon: 'success' })
-            } else {
-              wx.showToast({ title: '登录成功', icon: 'success' })
-            }
-          })
-        } else {
-          wx.showToast({ title: '登录成功', icon: 'success' })
-        }
-      })
-    } else {
-      wx.showToast({ title: '登录成功', icon: 'success' })
-    }
   },
 
   // ===========================================

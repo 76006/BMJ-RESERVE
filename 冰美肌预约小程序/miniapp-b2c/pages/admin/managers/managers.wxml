@@ -15,7 +15,7 @@
         <text class="section-count">({{admins.length}})</text>
       </view>
       <view class="staff-list">
-        <view class="staff-item" wx:for="{{admins}}" wx:key="phone">
+        <view class="staff-item" wx:for="{{admins}}" wx:key="key">
           <view class="staff-avatar {{item.role === 'superadmin' ? 'super' : ''}}">
             <text>{{item.name ? item.name[0] : '管'}}</text>
           </view>
@@ -27,7 +27,7 @@
           </view>
           <view class="staff-action">
             <view wx:if="{{item.role === 'superadmin'}}" class="tag-self">本人</view>
-            <view wx:else class="btn-remove" data-phone="{{item.phone}}" data-name="{{item.name}}" bindtap="removePerson">移除</view>
+            <view wx:else class="btn-remove" data-phone="{{item.phone}}" data-openid="{{item.openId}}" data-name="{{item.name}}" bindtap="removePerson">移除</view>
           </view>
         </view>
         <view wx:if="{{admins.length === 0}}" class="empty-tip">暂无管理员</view>
@@ -41,7 +41,7 @@
         <text class="section-count">({{operators.length}})</text>
       </view>
       <view class="staff-list">
-        <view class="staff-item" wx:for="{{operators}}" wx:key="phone">
+        <view class="staff-item" wx:for="{{operators}}" wx:key="key">
           <view class="staff-avatar">
             <text>{{item.name ? item.name[0] : '操'}}</text>
           </view>
@@ -52,7 +52,7 @@
             </view>
           </view>
           <view class="staff-action">
-            <view class="btn-remove" data-phone="{{item.phone}}" data-name="{{item.name}}" bindtap="removePerson">移除</view>
+            <view class="btn-remove" data-phone="{{item.phone}}" data-openid="{{item.openId}}" data-name="{{item.name}}" bindtap="removePerson">移除</view>
           </view>
         </view>
         <view wx:if="{{operators.length === 0}}" class="empty-tip">暂无操作师</view>
@@ -69,7 +69,7 @@
       <view class="visitor-list" wx:if="{{showVisitors}}">
         <view class="visitor-tip">打开过小程序的用户，可直接点击添加为操作师</view>
         <view class="staff-list">
-          <view class="staff-item" wx:for="{{visitors}}" wx:key="_id">
+          <view class="staff-item" wx:for="{{visitors}}" wx:key="key">
             <view class="staff-avatar light">
               <text>访</text>
             </view>

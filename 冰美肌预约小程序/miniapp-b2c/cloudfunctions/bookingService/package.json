@@ -1,0 +1,9 @@
+{
+  "name": "bookingService",
+  "version": "1.0.0",
+  "description": "受控预约查询与更新",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3"
+  }
+}

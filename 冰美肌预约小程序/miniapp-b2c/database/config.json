@@ -1,11 +1,11 @@
 {
   "_comment": "冰美肌小程序数据库安全规则配置 - 在云开发控制台手动设置",
   "_instructions": "云开发控制台 → 数据库 → 选择集合 → 权限设置",
-  "_important": "权限基于实际代码访问方式设定，不是拍脑袋。当前架构大部分操作是前端直接访问数据库，只有 sms_codes 完全走云函数。",
+  "_important": "阶段2目标权限。必须先部署本次云函数，再按此文件调整控制台权限，避免管理功能短暂中断。",
   "collections": {
     "bookings": {
-      "permission": "所有用户可读写",
-      "reason": "顾客创建预约（写）、查自己预约（读）；操作师需要改状态/填体验参数/签同意书（写别人创建的记录）；导出从内存数据导出不碰数据库。管理员全量读取已走 getAdminBookings 云函数，但状态更新等写操作仍走前端 db.doc().update()，必须放开写权限。",
+      "permission": "仅创建者可读写",
+      "reason": "顾客创建预约并读取自己的记录；管理员全量读取走 getAdminBookings，跨用户更新及手机号预约签到走 bookingService，客户端不再需要读取或修改他人的记录。",
       "indexes": [
         { "name": "idx_openid", "fields": ["_openid"], "description": "按用户openId查询自己的预约" },
         { "name": "idx_status", "fields": ["_status"], "description": "按状态筛选预约列表" },
@@ -16,15 +16,15 @@
       ]
     },
     "users": {
-      "permission": "所有用户可读，仅创建者可写",
-      "reason": "操作师需要在管理端 getAllUsers() 读取全部访客记录（读）；访客自己 _recordVisitor() 创建/更新自己的记录（写，是创建者）。",
+      "permission": "所有用户不可读写",
+      "reason": "访客记录和已验证手机号由 loginByPhone/getPhoneNumber 云函数维护；超级管理员通过 manageAdmins 读取必要的访客摘要。",
       "indexes": [
         { "name": "idx_openid", "fields": ["openId"], "description": "按openId查询用户" }
       ]
     },
     "admins": {
-      "permission": "所有用户可读写",
-      "reason": "managers.js 前端直接读写管理员表（添加/删除/查询）；_checkAdminByOpenId() 和 _tryLoginByPhone() 也直接读 admins。不同管理员需要互相增删，不限于创建者。",
+      "permission": "所有用户不可读写",
+      "reason": "管理员身份由云函数按当前调用者 OPENID 校验；人员增删查全部通过仅超级管理员可调用的 manageAdmins。",
       "indexes": [
         { "name": "idx_openid", "fields": ["openId"], "description": "按openId查询管理员身份" },
         { "name": "idx_phone", "fields": ["phone"], "description": "按手机号查询管理员" },
@@ -39,9 +39,14 @@
         { "name": "idx_phone_created", "fields": ["phone", "createdAt"], "description": "复合索引：手机号+创建时间（频率限制）" }
       ]
     },
+    "schedule": {
+      "permission": "所有用户可读",
+      "reason": "顾客需要读取开放时段；保存操作仅通过带管理员身份校验的 saveSchedule 云函数完成。",
+      "indexes": []
+    },
     "feedbacks": {
-      "permission": "所有用户可读，仅创建者可写",
-      "reason": "顾客 submitFeedback() 写入（是创建者）；操作师 feedbacks.js loadData() 读取全部回访问卷（读）。操作师不需要改问卷，只需要看。",
+      "permission": "仅创建者可读写",
+      "reason": "顾客提交并读取自己的问卷；管理员全量读取通过 getAdminFeedbacks 云函数完成。",
       "indexes": [
         { "name": "idx_recordId", "fields": ["recordId"], "description": "按预约记录ID查询问卷" },
         { "name": "idx_recordId_mode", "fields": ["recordId", "mode"], "description": "复合索引：记录ID+模式（去重）" }
@@ -57,9 +62,6 @@
       "ALI_SMS_SIGN": "阿里云短信签名名称",
       "ALI_SMS_TEMPLATE": "阿里云短信模板Code",
       "SMS_MOCK_ENABLED": "仅内测时设为 true；未配置正式短信服务时默认拒绝发送"
-    },
-    "manageAdmins": {
-      "ADMIN_SECRET": "管理员操作密钥（替代代码中的硬编码值）"
     }
   }
 }

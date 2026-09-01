@@ -14,7 +14,7 @@
 import os, re, json, sys
 from pathlib import Path
 
-BASE = Path(r"C:\Users\15436\WorkBuddy\20260318155749\anti-aging-website\miniapp-b2c")
+BASE = Path(__file__).resolve().parent
 PAGES_DIR = BASE / "pages"
 
 # 合规词汇表（来自小程序合规要求）

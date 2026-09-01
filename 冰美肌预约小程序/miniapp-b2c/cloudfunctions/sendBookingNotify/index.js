@@ -44,11 +44,22 @@ function buildData(b, status) {
 exports.main = async (event) => {
   const { bookingId, status } = event || {}
   if (!bookingId) return { ok: false, error: 'missing bookingId' }
+  if (status !== 'confirmed' && status !== 'rejected') {
+    return { ok: false, error: 'invalid status' }
+  }
   if (TEMPLATE_ID === 'REPLACE_WITH_YOUR_TEMPLATE_ID') {
     return { ok: false, error: 'TEMPLATE_ID 未配置' }
   }
 
   const db = cloud.database()
+  const openId = cloud.getWXContext().OPENID
+  const adminRes = await db.collection('admins')
+    .where({ openId, active: true })
+    .limit(1)
+    .get()
+  if (!adminRes.data || !adminRes.data[0]) {
+    return { ok: false, error: '无管理员权限' }
+  }
   let b
   try {
     // 业务主键是 booking.id，不是文档 _id，必须用 where 查询

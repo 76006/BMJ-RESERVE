@@ -7,13 +7,27 @@
  *
  * 安全说明：本函数以云函数身份写入，故集合 schedule 可读权限可保持
  * "所有用户可读"（供顾客端读取开放时段），写权限通过云函数绕过安全
- * 规则，相当于"仅管理员可写"。前端管理员页需先确认 _isAdmin 再调用。
+ * 规则。管理员身份必须在云函数内按当前 OPENID 校验，不能信任前端缓存。
  */
 const cloud = require('wx-server-sdk')
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 const db = cloud.database()
 
+async function isAdmin(openId) {
+  if (!openId) return false
+  const res = await db.collection('admins')
+    .where({ openId, active: true })
+    .limit(1)
+    .get()
+  return !!(res.data && res.data[0])
+}
+
 exports.main = async (event) => {
+  event = event || {}
+  const openId = cloud.getWXContext().OPENID
+  if (!(await isAdmin(openId))) {
+    return { success: false, updated: 0, error: '无管理员权限' }
+  }
   // 入参校验：schedule 必须是对象
   const schedule = event.schedule
   if (!schedule || typeof schedule !== 'object' || Array.isArray(schedule)) {
