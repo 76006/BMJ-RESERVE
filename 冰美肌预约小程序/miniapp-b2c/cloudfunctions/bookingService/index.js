@@ -1,8 +1,8 @@
 /**
  * bookingService - 受控预约查询与更新
  *
- * listToday：仅在有效签到码下返回当前微信本人/已验证手机号对应的当日预约。
- * completeCheckin：校验签到码、预约归属和签署信息后，在事务中完成签到。
+ * listToday：返回当前微信本人/已验证手机号对应的当日预约。
+ * completeCheckin：校验预约归属、日期、状态和签署信息后，在事务中完成签到。
  * update：管理员可更新业务字段；普通用户不能通过通用更新写入签到凭证或到店状态。
  */
 const cloud = require('wx-server-sdk')
@@ -21,8 +21,8 @@ const ADMIN_FIELDS = new Set([
   'name', 'gender', 'age', 'idCard', 'phone', '_adminNote', '_followUpRecords',
   '_clientManager', '_totalEnergy', '_shotDistribution', '_maxLevel',
   '_immediateSatisfaction', '_comfortSatisfaction', '_productFeedback',
-  '_day1FollowUp', '_day30FollowUp', '_day90FollowUp', '_photos',
-  '_beforePhotos', '_halfPhotos', '_afterPhotos', '_feedback24',
+  '_day30FollowUp', '_day90FollowUp', '_photos',
+  '_immediatePhotos', '_day30Photos', '_day90Photos', '_feedback24',
   '_feedback30', '_feedback90', 'updatedAt'
 ])
 
@@ -56,43 +56,6 @@ function cleanText(value, maxLength) {
 
 function todayInChina() {
   return new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10)
-}
-
-function hashCheckinToken(token) {
-  return crypto.createHash('sha256').update(String(token || ''), 'utf8').digest('hex')
-}
-
-function validTokenFormat(token) {
-  return /^[A-Za-z0-9_-]{8,64}$/.test(String(token || ''))
-}
-
-function hashMatches(expected, token) {
-  if (!expected || !validTokenFormat(token)) return false
-  const actual = hashCheckinToken(token)
-  const left = Buffer.from(String(expected), 'hex')
-  const right = Buffer.from(actual, 'hex')
-  return left.length === right.length && crypto.timingSafeEqual(left, right)
-}
-
-async function validateStoreCheckinToken(token) {
-  if (!validTokenFormat(token)) return false
-  try {
-    const res = await db.collection('store_config').doc('current').get()
-    const config = (res && res.data) || {}
-    return hashMatches(config.checkinQrTokenHash, token)
-  } catch (err) {
-    if (isMissingDocumentError(err)) return false
-    throw err
-  }
-}
-
-async function validateCheckinToken(booking, token) {
-  if (!validTokenFormat(token)) return false
-  if (hashMatches(booking && booking._checkinTokenHash, token)) {
-    const expiresAt = Date.parse(booking._checkinTokenExpiresAt || '')
-    return !Number.isFinite(expiresAt) || expiresAt >= Date.now()
-  }
-  return validateStoreCheckinToken(token)
 }
 
 async function getBookingAccess(openId, booking) {
@@ -255,11 +218,10 @@ async function createBooking(openId, event) {
     _immediateSatisfaction: 0,
     _comfortSatisfaction: 0,
     _photos: [],
-    _beforePhotos: [],
-    _halfPhotos: [],
-    _afterPhotos: [],
+    _immediatePhotos: [],
+    _day30Photos: [],
+    _day90Photos: [],
     _productFeedback: '',
-    _day1FollowUp: '',
     _day30FollowUp: '',
     _day90FollowUp: '',
     _adminNote: '',
@@ -328,12 +290,9 @@ function mergeUnique(groups) {
   return Object.keys(map).map(key => map[key])
 }
 
-async function listToday(openId, visitDate, checkinToken) {
+async function listToday(openId, visitDate) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(visitDate || '')) {
     return { success: false, data: [], error: '日期格式不正确' }
-  }
-  if (!(await validateStoreCheckinToken(checkinToken))) {
-    return { success: false, data: [], invalidCode: true, error: '签到码无效或已更新，请重新扫描门店签到码' }
   }
   const phone = await getVerifiedPhone(openId)
   if (!phone) {
@@ -376,15 +335,12 @@ function publicCheckinBooking(booking) {
   }
 }
 
-async function getForCheckin(openId, bookingId, checkinToken) {
+async function getForCheckin(openId, bookingId) {
   if (!bookingId) return { success: false, error: '缺少预约编号' }
   const res = await db.collection('bookings').where({ id: bookingId }).limit(1).get()
   const booking = res.data && res.data[0]
   if (!booking) return { success: false, error: '未找到该预约' }
 
-  if (!(await validateCheckinToken(booking, checkinToken))) {
-    return { success: false, invalidCode: true, error: '签到码无效或已失效，请让工作人员重新生成' }
-  }
   const access = await getBookingAccess(openId, booking)
   if (!access.allowed && !access.phone) {
     return { success: false, requiresPhoneAuth: true, error: '请先授权预约手机号，以便确认预约归属' }
@@ -413,10 +369,6 @@ async function completeCheckin(openId, event) {
   const res = await db.collection('bookings').where({ id: bookingId }).limit(1).get()
   const booking = res.data && res.data[0]
   if (!booking) return { success: false, error: '预约不存在' }
-  if (!(await validateCheckinToken(booking, event.checkinToken))) {
-    return { success: false, invalidCode: true, error: '签到码无效或已失效，请重新扫描' }
-  }
-
   const access = await getBookingAccess(openId, booking)
   if (!access.allowed && !access.phone) {
     return { success: false, requiresPhoneAuth: true, error: '请先授权预约手机号' }
@@ -453,9 +405,7 @@ async function completeCheckin(openId, event) {
       gender,
       age,
       idCard,
-      updatedAt: now,
-      _checkinTokenHash: '',
-      _checkinTokenExpiresAt: ''
+      updatedAt: now
     }
     if (!access.owner && access.phoneOwner) data._openid = openId
     await bookingRef.update({ data })
@@ -598,9 +548,9 @@ exports.main = async (event) => {
   if (!openId) return { success: false, error: '无法识别当前微信用户' }
   try {
     if (event.action === 'create') return await createBooking(openId, event)
-    if (event.action === 'listToday') return await listToday(openId, event.visitDate, event.checkinToken)
+    if (event.action === 'listToday') return await listToday(openId, event.visitDate)
     if (event.action === 'getForCheckin') {
-      return await getForCheckin(openId, String(event.bookingId || '').trim(), event.checkinToken)
+      return await getForCheckin(openId, String(event.bookingId || '').trim())
     }
     if (event.action === 'completeCheckin') return await completeCheckin(openId, event)
     if (event.action === 'startExperience') return await startExperience(openId, event)

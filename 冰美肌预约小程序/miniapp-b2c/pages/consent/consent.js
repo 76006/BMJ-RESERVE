@@ -157,13 +157,10 @@ Page({
     const signTime = new Date().toISOString()
 
     if ((this.data.source === 'checkin' || this.data.source === 'guest_checkin') && this.data.bookingId) {
-      app.saveConsent(this.data.bookingId, {
-        name: signName,
-        image: '',
-        photoAuth1: this.data.photoAuth1,
-        photoAuth2: this.data.photoAuth2
-      })
-      // 回写自动补全的客户信息到当前 booking
+      if (this._submitting) return
+      this._submitting = true
+      wx.showLoading({ title: '正在保存', mask: true })
+      // 先回写客户资料，再保存签署结果；两步都成功后才允许签到页继续。
       app.updateCustomerFields(this.data.bookingId, {
         name: this.data.bookingData.name,
         gender: this.data.bookingData.gender,
@@ -171,18 +168,35 @@ Page({
         idCard: this.data.bookingData.idCard,
         phone: this.data.bookingData.phone
       })
-      if (this.data.source === 'guest_checkin') {
-        app.globalData._guestCheckinComplete = {
-          bookingId: this.data.bookingId,
-          deviceModel: ''
-        }
-      } else {
-        app.globalData._checkinConsent = {
-          bookingId: this.data.bookingId,
+        .then(() => app.saveConsent(this.data.bookingId, {
           name: signName,
-          image: ''
-        }
-      }
+          image: '',
+          photoAuth1: this.data.photoAuth1,
+          photoAuth2: this.data.photoAuth2
+        }))
+        .then(() => {
+          if (this.data.source === 'guest_checkin') {
+            app.globalData._guestCheckinComplete = {
+              bookingId: this.data.bookingId,
+              deviceModel: ''
+            }
+          } else {
+            app.globalData._checkinConsent = {
+              bookingId: this.data.bookingId,
+              name: signName,
+              image: ''
+            }
+          }
+          wx.navigateBack()
+        })
+        .catch(err => {
+          wx.showToast({ title: err.message || '保存失败，请重试', icon: 'none' })
+        })
+        .finally(() => {
+          this._submitting = false
+          wx.hideLoading()
+        })
+      return
     } else {
       app.globalData._consentConfirmed = true
       app.globalData._consentSignName = signName

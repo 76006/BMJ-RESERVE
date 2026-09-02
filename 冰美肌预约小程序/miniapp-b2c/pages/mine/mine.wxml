@@ -198,7 +198,7 @@
     </view>
 
     <view wx:else class="booking-list">
-      <view class="booking-card" wx:for="{{bookings}}" wx:key="id" data-id="{{item.id}}" data-can-feedback="{{item.canFeedback}}" bindtap="goFeedback">
+      <view class="booking-card" wx:for="{{bookings}}" wx:key="id">
         <view class="booking-top">
           <view class="booking-id">#{{index + 1}}</view>
           <view class="booking-status {{item.userStatus === '新预约' ? 'status-pending-confirm' : ''}} {{item.userStatus === '已预约' ? 'status-confirmed' : ''}} {{item.userStatus === '已到店' ? 'visited' : ''}} {{item.userStatus === '体验中' ? 'in-experience' : ''}} {{item.userStatus === '已体验' ? 'completed' : ''}} {{item.userStatus === '已取消' ? 'cancelled' : ''}} {{item.userStatus === '预约失败' ? 'rejected' : ''}}">{{item.userStatus}}</view>
@@ -240,22 +240,17 @@
         </view>
         <!-- 已到店/已体验：问卷 + 护理须知（体验后才触发） -->
         <view class="booking-footer" wx:elif="{{item._status === 'visited' || item._status === 'in_experience' || item._status === 'completed'}}">
-          <block wx:if="{{item.isDone}}">
-            <text class="booking-tap-hint dim">体验已完成</text>
+          <block wx:if="{{item.canAftercare}}">
+            <view class="booking-action" data-id="{{item.id}}" data-modes="{{item.availableAftercares}}" catchtap="goAftercare">
+              <text class="booking-tap-hint">查看护理须知 →</text>
+            </view>
           </block>
-          <block wx:else>
-            <block wx:if="{{item.canAftercare}}">
-              <view class="booking-action" data-id="{{item.id}}" data-modes="{{item.availableAftercares}}" catchtap="goAftercare">
-                <text class="booking-tap-hint">查看护理须知 →</text>
-              </view>
-            </block>
-            <block wx:if="{{item.canFeedback}}">
-              <view class="booking-action" data-id="{{item.id}}" data-modes="{{item.availableFeedbacks}}" catchtap="goFeedback">
-                <text class="booking-tap-hint">填写回访问卷 →</text>
-              </view>
-            </block>
-            <text class="booking-tap-hint dim" wx:if="{{!item.canAftercare && !item.canFeedback}}">回访时间未到</text>
+          <block wx:if="{{item.canFeedback}}">
+            <view class="booking-action" data-id="{{item.id}}" data-modes="{{item.availableFeedbacks}}" catchtap="goFeedback">
+              <text class="booking-tap-hint">填写回访问卷 →</text>
+            </view>
           </block>
+          <text class="booking-tap-hint dim" wx:if="{{!item.canAftercare && !item.canFeedback}}">回访时间未到</text>
         </view>
       </view>
     </view>

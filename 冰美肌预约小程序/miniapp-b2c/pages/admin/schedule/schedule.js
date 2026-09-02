@@ -4,14 +4,24 @@ Page({
     selectedDate: '',
     dateList: [],
     TIME_SLOTS: ['9:30-11:30', '13:00-15:00', '15:30-17:30'],
-    editing: false
+    editing: false,
+    loading: false,
+    saving: false,
+    loadError: false
   },
 
   onShow() {
     const app = getApp()
     if (!app.globalData.isAdmin) { wx.navigateBack(); return }
+    this.setData({ loading: true, loadError: false })
     this.loadSchedule()
-    this.generateDateList()
+      .then(() => this.generateDateList())
+      .catch(err => {
+        console.error('[schedule] 读取营业时段失败:', err)
+        this.setData({ loadError: true })
+        wx.showToast({ title: '读取失败，请返回后重试', icon: 'none' })
+      })
+      .finally(() => this.setData({ loading: false }))
   },
 
   loadSchedule() {
@@ -22,29 +32,37 @@ Page({
     if (isDevtools) {
       // 演示模式：读本地降级
       const data = wx.getStorageSync('_schedule') || {}
-      this.setData({ schedule: data })
-      return
+      return new Promise(resolve => this.setData({ schedule: data }, resolve))
     }
 
     // 真机：从云端 schedule 集合读取（所有用户可读）
     const db = app.globalData.db
     if (!db) {
-      const data = wx.getStorageSync('_schedule') || {}
-      this.setData({ schedule: data })
-      return
+      return Promise.reject(new Error('云数据库尚未初始化'))
     }
-    db.collection('schedule').doc('current').get()
+    return db.collection('schedule').doc('current').get()
       .then(res => {
         const data = (res.data && res.data.schedule) || {}
-        this.setData({ schedule: data })
+        return new Promise(resolve => this.setData({ schedule: data }, resolve))
       })
-      .catch(() => {
-        // 文档不存在 => 默认全关闭
-        this.setData({ schedule: {} })
+      .catch(err => {
+        const message = String((err && (err.errMsg || err.message)) || '').toLowerCase()
+        const missing = message.includes('not exist') || message.includes('not found') ||
+          message.includes('document_not_found') || message.includes('-502001')
+        if (missing) {
+          // 首次部署尚无 current 文档时，默认全部关闭。
+          return new Promise(resolve => this.setData({ schedule: {} }, resolve))
+        }
+        throw err
       })
   },
 
   saveSchedule() {
+    if (this.data.loading || this.data.saving) return
+    if (this.data.loadError) {
+      wx.showToast({ title: '云端时段未读取成功，请返回重试', icon: 'none' })
+      return
+    }
     const app = getApp()
     const schedule = this.data.schedule
     const sys = wx.getSystemInfoSync()
@@ -58,6 +76,7 @@ Page({
       return
     }
 
+    this.setData({ saving: true })
     wx.showLoading({ title: '保存中...', mask: true })
     wx.cloud.callFunction({
       name: 'saveSchedule',
@@ -67,12 +86,14 @@ Page({
       const r = res.result || {}
       if (r.success) {
         wx.showToast({ title: '已保存并同步', icon: 'success', duration: 2000 })
+        this.setData({ editing: false, selectedDate: '' })
       } else {
         wx.showToast({ title: '保存失败: ' + (r.error || ''), icon: 'none' })
       }
-      this.setData({ editing: false, selectedDate: '' })
+      this.setData({ saving: false })
     }).catch(err => {
       wx.hideLoading()
+      this.setData({ saving: false })
       wx.showToast({ title: '保存失败，请重试', icon: 'none' })
       console.error('[saveSchedule] 云函数调用失败:', err)
     })
@@ -113,11 +134,16 @@ Page({
   },
 
   selectDate(e) {
+    if (this.data.loading || this.data.saving) {
+      wx.showToast({ title: '正在读取时段，请稍候', icon: 'none' })
+      return
+    }
     const ds = e.currentTarget.dataset.date
     this.setData({ selectedDate: ds, editing: true })
   },
 
   toggleSlot(e) {
+    if (this.data.loading || this.data.saving) return
     const slot = e.currentTarget.dataset.slot
     const ds = this.data.selectedDate
     const schedule = { ...this.data.schedule }
@@ -139,6 +165,7 @@ Page({
   },
 
   toggleAllDay(e) {
+    if (this.data.loading || this.data.saving) return
     const ds = this.data.selectedDate
     const schedule = { ...this.data.schedule }
     const open = e.currentTarget.dataset.open

@@ -91,7 +91,7 @@ async function save(openId, input) {
   })
   try {
     await storeRef.get()
-    // 使用 update 保留签到码令牌等内部字段，门店资料保存不应导致现有签到码失效。
+    // 使用 update 保留文档中的其他内部字段，门店资料保存只修改门店配置。
     await storeRef.update({ data: updateData })
   } catch (err) {
     if (!isMissingDocumentError(err)) throw err

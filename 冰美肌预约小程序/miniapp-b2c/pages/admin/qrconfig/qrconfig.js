@@ -98,17 +98,18 @@ Page({
 
   // ===== 门店签到码 =====
   genCheckinCode() {
-    if (this.data.checkinCodeReady) {
-      const previewUrl = this.data.checkinCodeFileID || this.data.checkinCodeUrl
-      if (previewUrl) {
-        wx.previewImage({ urls: [previewUrl] })
-      }
-      return
-    }
+    let envVersion = 'release'
+    try {
+      const account = wx.getAccountInfoSync()
+      envVersion = account && account.miniProgram && account.miniProgram.envVersion
+        ? account.miniProgram.envVersion
+        : 'release'
+    } catch (e) { /* 使用正式版兜底 */ }
 
     wx.showLoading({ title: '生成中...', mask: true })
     wx.cloud.callFunction({
       name: 'genCheckinCode',
+      data: { envVersion },
       // 云函数内要调微信接口，给足时间
       timeout: 20000,
       success: res => {
@@ -147,6 +148,11 @@ Page({
         console.error('[genCheckinCode] 调用失败:', err)
       }
     })
+  },
+
+  previewCheckinCode() {
+    const previewUrl = this.data.checkinCodeFileID || this.data.checkinCodeUrl
+    if (previewUrl) wx.previewImage({ urls: [previewUrl] })
   },
 
   _loadCachedCheckinCode() {

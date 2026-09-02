@@ -42,6 +42,7 @@ Page({
   },
 
   _completeCheckIn() {
+    if (this._submitting) return
     const app = getApp()
     const booking = app.getBookingById(this.data.bookingId)
     if (!booking) return
@@ -49,17 +50,23 @@ Page({
       this.setData({ booking, needConsent: false, done: true })
       return
     }
-    // 同意书签署成功后签到，并沿合法流程更新为“已到店”。
-    const checkedIn = booking.checkInAt ? true : app.checkIn(this.data.bookingId, booking.deviceModel || '')
-    const statusUpdated = checkedIn && app.updateBookingStatus(this.data.bookingId, 'visited')
-    this.setData({
-      booking: app.getBookingById(this.data.bookingId),
-      needConsent: false,
-      done: !!statusUpdated
-    })
-    if (!statusUpdated) {
-      wx.showToast({ title: '签到状态更新失败，请重试', icon: 'none' })
-    }
+    this._submitting = true
+    wx.showLoading({ title: '正在签到', mask: true })
+    app.checkIn(this.data.bookingId, booking.deviceModel || '')
+      .then(() => {
+        this.setData({
+          booking: app.getBookingById(this.data.bookingId),
+          needConsent: false,
+          done: true
+        })
+      })
+      .catch(err => {
+        wx.showToast({ title: err.message || '签到失败，请重试', icon: 'none' })
+      })
+      .finally(() => {
+        this._submitting = false
+        wx.hideLoading()
+      })
   },
 
   goConsent() {

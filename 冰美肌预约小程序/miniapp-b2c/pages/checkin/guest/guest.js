@@ -1,10 +1,36 @@
 // 顾客签到页（扫门店签到码 → 自动识别预约 → 内嵌知情同意书 → 完成）
 // 自动识别逻辑：
-//   1. app.js 扫码解析 → 传入 bookingId（单预约码）
+//   1. 新版小程序码直接进入本页并携带 scene；旧版码仍由 app.js 首页中转兼容
 //   2. 无 bookingId 时：从 userProfile 取手机号，先本地匹配今日预约（暖启动即时），
 //      本地未命中 → 再云端按「手机号 + 今日」查询未签到预约（修复冷启动时序 + 兼容操作师代下）
 //   3. 仍无匹配：进入 not_found，提供"手动选择今日预约"兜底列表
 // 数据补全：匹配到手机号后，自动从历史 booking 记录中提取姓名/性别/年龄/身份证等字段
+
+function parseScene(raw) {
+  const result = {}
+  if (!raw) return result
+
+  let decoded = String(raw)
+  try {
+    decoded = decodeURIComponent(decoded)
+  } catch (err) {
+    console.warn('[签到] scene 解码失败，使用原值:', err)
+  }
+
+  decoded.split('&').forEach(item => {
+    if (!item) return
+    const index = item.indexOf('=')
+    const key = index >= 0 ? item.slice(0, index) : item
+    const value = index >= 0 ? item.slice(index + 1) : ''
+    if (!key) return
+    try {
+      result[decodeURIComponent(key)] = decodeURIComponent(value)
+    } catch (err) {
+      result[key] = value
+    }
+  })
+  return result
+}
 
 Page({
   data: {
@@ -41,11 +67,15 @@ Page({
   },
 
   onLoad(options) {
+    options = options || {}
     const app = getApp()
     const today = this._fmtDate(new Date())
     this.setData({ today })
-    this._checkinToken = String(options.token || '').trim()
-    this._pendingBookingId = String(options.id || '').trim()
+    // wxacode.getUnlimited 的 scene 在直接打开目标页时由页面 onLoad 接收。
+    // 同时兼容普通链接参数和旧版首页中转传入的 id。
+    const rawScene = options.scene || (options.query && options.query.scene) || ''
+    const scene = parseScene(rawScene)
+    this._pendingBookingId = String(options.id || options.bookingId || scene.id || '').trim()
 
     // 情况1：预约专属小程序码传入 bookingId。
     // 始终由云端校验该预约是否属于当前微信，避免本地缓存误认。
@@ -77,7 +107,7 @@ Page({
     this.setData({ step: 'loading' })
     wx.cloud.callFunction({
       name: 'bookingService',
-      data: { action: 'getForCheckin', bookingId, checkinToken: this._checkinToken }
+      data: { action: 'getForCheckin', bookingId }
     }).then(res => {
       const result = res.result || {}
       if (!result.success || !result.data) {
@@ -151,13 +181,12 @@ Page({
   _fetchTodayByPhone(phone, today) {
     return wx.cloud.callFunction({
       name: 'bookingService',
-      data: { action: 'listToday', visitDate: today, checkinToken: this._checkinToken }
+      data: { action: 'listToday', visitDate: today }
     }).then(function (res) {
         const result = res.result || {}
         if (!result.success) {
           const error = new Error(result.error || '查询失败')
           error.requiresPhoneAuth = result.requiresPhoneAuth === true
-          error.invalidCode = result.invalidCode === true
           throw error
         }
         return result.data || []
@@ -364,7 +393,7 @@ Page({
     if (!booking) { this._submitting = false; return }
 
     wx.showLoading({ title: '正在签到...', mask: true })
-    app.completeGuestCheckin(booking.id, this._checkinToken, {
+    app.completeGuestCheckin(booking.id, {
       name: this.data.bookingData.name || booking.name,
       gender: this.data.bookingData.gender || booking.gender,
       age: this.data.bookingData.age || booking.age,

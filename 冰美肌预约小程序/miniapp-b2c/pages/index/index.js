@@ -84,14 +84,11 @@ Page({
     if (!app.globalData._launchCheckin) return false
     app.globalData._launchCheckin = false
     const bookingId = app.globalData._checkinBookingId
-    const checkinToken = app.globalData._checkinToken
     app.globalData._checkinBookingId = null
-    app.globalData._checkinToken = ''
-    const tokenQuery = checkinToken ? '&token=' + encodeURIComponent(checkinToken) : ''
     if (bookingId) {
-      wx.navigateTo({ url: '/pages/checkin/guest/guest?id=' + encodeURIComponent(bookingId) + tokenQuery })
+      wx.navigateTo({ url: '/pages/checkin/guest/guest?id=' + encodeURIComponent(bookingId) })
     } else {
-      wx.navigateTo({ url: '/pages/checkin/guest/guest' + (checkinToken ? '?token=' + encodeURIComponent(checkinToken) : '') })
+      wx.navigateTo({ url: '/pages/checkin/guest/guest' })
     }
     return true
   },

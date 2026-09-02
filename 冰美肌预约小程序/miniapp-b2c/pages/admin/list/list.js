@@ -49,6 +49,25 @@ Page({
     wx.navigateTo({ url: '/pages/admin/export/export' })
   },
 
+  _runAction(action, successTitle) {
+    if (this._actionPending) return
+    this._actionPending = true
+    wx.showLoading({ title: '处理中', mask: true })
+    Promise.resolve()
+      .then(action)
+      .then(() => {
+        wx.showToast({ title: successTitle, icon: 'none' })
+        this.loadData()
+      })
+      .catch(err => {
+        wx.showToast({ title: err.message || '操作失败，请重试', icon: 'none' })
+      })
+      .finally(() => {
+        this._actionPending = false
+        wx.hideLoading()
+      })
+  },
+
   onConfirmTap(e) {
     const id = e.currentTarget.dataset.id
     const app = getApp()
@@ -66,9 +85,7 @@ Page({
         confirmColor: '#DC2626',
         success: (res) => {
           if (res.confirm) {
-            app.confirmBooking(id, '管理员')
-            wx.showToast({ title: '已确认预约', icon: 'success' })
-            this.loadData()
+            this._runAction(() => app.confirmBooking(id, '管理员'), '已确认预约')
           }
         }
       })
@@ -81,9 +98,7 @@ Page({
       cancelText: '取消',
       success: (res) => {
         if (res.confirm) {
-          app.confirmBooking(id, '管理员')
-          wx.showToast({ title: '已确认预约', icon: 'success' })
-          this.loadData()
+          this._runAction(() => app.confirmBooking(id, '管理员'), '已确认预约')
         }
       }
     })
@@ -103,13 +118,10 @@ Page({
       cancelText: '取消',
       success: (res) => {
         if (res.confirm) {
-          const ok = app.rejectBooking(id, (res.content || '').trim())
-          if (ok) {
-            wx.showToast({ title: '已拒绝', icon: 'none' })
-            this.loadData()
-          } else {
-            wx.showToast({ title: '当前状态不可拒绝', icon: 'none' })
-          }
+          this._runAction(
+            () => app.rejectBooking(id, (res.content || '').trim()),
+            '已拒绝'
+          )
         }
       }
     })

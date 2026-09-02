@@ -83,11 +83,11 @@
       </view>
     </view>
     <view class="qrcode-img-area" wx:if="{{checkinCodeUrl || checkinCodeFileID}}">
-      <image class="qrcode-img" src="{{checkinCodeFileID || checkinCodeUrl}}" mode="widthFix" show-menu-by-longpress binderror="onCodeImageError" />
-      <text class="qrcode-tip">长按图片保存，打印贴门店前台</text>
+      <image class="qrcode-img" src="{{checkinCodeFileID || checkinCodeUrl}}" mode="widthFix" show-menu-by-longpress bindtap="previewCheckinCode" binderror="onCodeImageError" />
+      <text class="qrcode-tip">点击查看大图，长按保存后可打印贴在门店前台</text>
     </view>
-    <button class="qrcode-btn" bindtap="genCheckinCode" disabled="{{checkinCodeReady}}">
-      {{checkinCodeReady ? '签到码已生成' : '生成门店签到码'}}
+    <button class="qrcode-btn" bindtap="genCheckinCode">
+      {{checkinCodeReady ? '重新生成门店签到码' : '生成门店签到码'}}
     </button>
   </view>
 

@@ -106,6 +106,30 @@ Page({
   onRetry(e) { this.setData({ retry: e.currentTarget.dataset.v }) },
   onRetryReason(e) { this.setData({ retryReason: e.detail.value }) },
 
+  _getOpenId(app) {
+    return new Promise(resolve => app.getOpenId(openid => resolve(openid || '')))
+  },
+
+  _saveCloudFeedback(feedback) {
+    const db = wx.cloud.database()
+    if (!db) return Promise.reject(new Error('云数据库未初始化'))
+    return db.collection('feedbacks')
+      .where({
+        recordId: feedback.recordId,
+        mode: feedback.mode,
+        _creatorOpenId: feedback._creatorOpenId
+      })
+      .limit(1)
+      .get()
+      .then(res => {
+        const existing = res.data && res.data[0]
+        if (existing && existing._id) {
+          return db.collection('feedbacks').doc(existing._id).update({ data: feedback })
+        }
+        return db.collection('feedbacks').add({ data: feedback })
+      })
+  },
+
   submitFeedback() {
     if (this.data.isPreview) {
       wx.showToast({ title: '预览模式，不会真正提交', icon: 'none' })
@@ -120,43 +144,50 @@ Page({
       wx.showToast({ title: '请选择二次体验意愿', icon: 'none' })
       return
     }
-
-    const feedback = {
-      recordId: this.data.recordId,
-      mode: this.data.mode,
-      areas: this.data.areas,
-      experience: this.data.experience,
-      therapist: this.data.therapist,
-      photos: this.data.photos,
-      remark: this.data.remark,
-      retry: this.data.retry,
-      retryReason: this.data.retryReason,
-      submittedAt: new Date().toISOString()
-    }
-
-    const list = wx.getStorageSync('feedbacks') || []
-    const idx = list.findIndex(f => f.recordId === feedback.recordId && f.mode === feedback.mode)
-    if (idx >= 0) list[idx] = feedback
-    else list.push(feedback)
-    wx.setStorageSync('feedbacks', list)
-
-    // 同步写入云数据库 feedbacks 集合（异步获取 openId 确保隐私隔离）
-    const app2 = getApp()
-    app2.getOpenId(function(openid) {
-      feedback._creatorOpenId = openid || ''
-      const db = wx.cloud.database()
-      if (db) {
-        db.collection('feedbacks').add({ data: feedback })
-          .then(() => console.log('[云开发] 回访问卷已上传'))
-          .catch(err => console.warn('[云开发] 回访问卷上传失败:', err))
-      }
-    })
-
-    // 回写 booking 状态
     const app = getApp()
-    app.markFeedbackDone(this.data.recordId, this.data.mode)
+    if (this._submitting) return
+    this._submitting = true
+    wx.showLoading({ title: '正在提交', mask: true })
+    const photoFolder = `feedback/${this.data.recordId}/${this.data.mode}`
 
-    wx.showToast({ title: '感谢反馈！', icon: 'success', duration: 2000 })
-    setTimeout(() => wx.navigateBack(), 2000)
+    Promise.all(this.data.photos.map(path => app.uploadImage(path, photoFolder)))
+      .then(photos => this._getOpenId(app).then(openid => ({ photos, openid })))
+      .then(({ photos, openid }) => {
+        if (!openid) throw new Error('无法识别当前微信用户')
+        const feedback = {
+          recordId: this.data.recordId,
+          mode: this.data.mode,
+          areas: this.data.areas,
+          experience: this.data.experience,
+          therapist: this.data.therapist,
+          photos,
+          remark: this.data.remark,
+          retry: this.data.retry,
+          retryReason: this.data.retryReason,
+          submittedAt: new Date().toISOString(),
+          _creatorOpenId: openid
+        }
+        return this._saveCloudFeedback(feedback)
+          .then(() => app.markFeedbackDone(this.data.recordId, this.data.mode))
+          .then(() => feedback)
+      })
+      .then(feedback => {
+        const list = wx.getStorageSync('feedbacks') || []
+        const idx = list.findIndex(f => f.recordId === feedback.recordId && f.mode === feedback.mode)
+        if (idx >= 0) list[idx] = feedback
+        else list.push(feedback)
+        wx.setStorageSync('feedbacks', list)
+        this.setData({ photos: feedback.photos })
+        wx.showToast({ title: '感谢反馈！', icon: 'success', duration: 1500 })
+        setTimeout(() => wx.navigateBack(), 1500)
+      })
+      .catch(err => {
+        console.error('[回访问卷] 提交失败:', err)
+        wx.showToast({ title: err.message || '提交失败，请重试', icon: 'none' })
+      })
+      .finally(() => {
+        this._submitting = false
+        wx.hideLoading()
+      })
   }
 })

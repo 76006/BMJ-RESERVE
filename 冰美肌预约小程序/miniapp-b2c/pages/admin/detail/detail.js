@@ -46,14 +46,18 @@ Page({
     const defaults = {
       _clientManager: '', _totalEnergy: '', _shotDistribution: '', _maxLevel: '',
       _immediateSatisfaction: 0, _comfortSatisfaction: 0,
-      _photos: [], _beforePhotos: [], _halfPhotos: [], _afterPhotos: [],
+      _photos: [], _immediatePhotos: [], _day30Photos: [], _day90Photos: [],
       _productFeedback: '',
-      _day1FollowUp: '', _day30FollowUp: '', _day90FollowUp: '',
+      _day30FollowUp: '', _day90FollowUp: '',
       _followUpRecords: []
     }
     Object.keys(defaults).forEach(k => {
       if (!(k in booking)) booking[k] = defaults[k]
     })
+    // 旧测试数据中的“体验后”照片自动显示到新的“体验后立即”位置。
+    if (booking._immediatePhotos.length === 0 && Array.isArray(booking._afterPhotos)) {
+      booking._immediatePhotos = booking._afterPhotos
+    }
     // 预格式化日期（WXML 无法直接调用 Page 方法）
     booking._createdAtDisplay = this._fmtTime(booking.createdAt)
     booking.consentSignTimeDisplay = booking.consentSignTime ? this._fmtTime(booking.consentSignTime) : ''
@@ -119,18 +123,55 @@ Page({
     if (f30 || f90 || f24) this.setData(data)
   },
 
+  _runBookingAction(action, successTitle, onSuccess) {
+    if (this._actionPending) return
+    this._actionPending = true
+    wx.showLoading({ title: '处理中', mask: true })
+    Promise.resolve()
+      .then(action)
+      .then(result => {
+        wx.hideLoading()
+        if (onSuccess) onSuccess(result)
+        else this._refreshBooking()
+        if (successTitle) wx.showToast({ title: successTitle, icon: 'none' })
+      })
+      .catch(err => {
+        wx.hideLoading()
+        wx.showToast({ title: err.message || '操作失败，请重试', icon: 'none' })
+      })
+      .finally(() => {
+        this._actionPending = false
+      })
+  },
+
   previewCompPhoto(e) {
     const { idx, type } = e.currentTarget.dataset
-    const key = type === 'before' ? '_beforePhotos' : type === 'half' ? '_halfPhotos' : '_afterPhotos'
+    const key = this._comparePhotoField(type)
+    if (!key) return
     const photos = this.data.booking[key] || []
     if (photos[idx]) {
-      wx.previewImage({ current: photos[idx].path, urls: photos.map(p => p.path) })
+      const urls = photos.map(p => typeof p === 'string' ? p : p.path)
+      wx.previewImage({ current: urls[idx], urls })
     }
+  },
+
+  _comparePhotoField(type) {
+    const fields = {
+      immediate: '_immediatePhotos',
+      day30: '_day30Photos',
+      day90: '_day90Photos'
+    }
+    return fields[type] || ''
   },
 
   previewFbPhoto(e) {
     const { type, idx } = e.currentTarget.dataset
-    const fb = type === 'feedback30' ? this.data.feedback30 : this.data.feedback90
+    const fbMap = {
+      feedback24: this.data.feedback24,
+      feedback30: this.data.feedback30,
+      feedback90: this.data.feedback90
+    }
+    const fb = fbMap[type]
     if (fb && fb.photos) {
       wx.previewImage({ current: fb.photos[idx], urls: fb.photos })
     }
@@ -153,15 +194,12 @@ Page({
       this.setData({ showStatusPicker: false, showCancelModal: true, cancelReason: '' })
       return
     }
-    const app = getApp()
-    const ok = app.updateBookingStatus(this.data.booking.id, key)
-    if (!ok) {
-      wx.showToast({ title: '不允许跳过或回退状态', icon: 'none' })
-      this.setData({ showStatusPicker: false })
-      return
-    }
-    this._refreshBooking()
     this.setData({ showStatusPicker: false })
+    const app = getApp()
+    this._runBookingAction(
+      () => app.updateBookingStatus(this.data.booking.id, key),
+      '状态已更新'
+    )
   },
 
   onCancelReasonInput(e) { this.setData({ cancelReason: e.detail.value }) },
@@ -169,23 +207,15 @@ Page({
   confirmCancel() {
     const reason = (this.data.cancelReason || '').trim()
     if (!reason) { wx.showToast({ title: '请填写取消原因', icon: 'none' }); return }
-    if (this._submitting) return
-    this._submitting = true
     const app = getApp()
-    const ok = app.cancelBooking(this.data.booking.id, reason)
-    if (!ok) {
-      wx.showToast({ title: '当前状态不可取消', icon: 'none' })
-      this.setData({ showCancelModal: false, cancelReason: '' })
-      this._submitting = false
-      return
-    }
-    this.setData({
-      booking: app.getBookingById(this.data.booking.id),
-      showCancelModal: false,
-      cancelReason: ''
-    })
-    wx.showToast({ title: '已取消', icon: 'success' })
-    this._submitting = false
+    this._runBookingAction(
+      () => app.cancelBooking(this.data.booking.id, reason),
+      '已取消',
+      () => {
+        this.setData({ showCancelModal: false, cancelReason: '' })
+        this._refreshBooking()
+      }
+    )
   },
 
   closeCancelModal() { this.setData({ showCancelModal: false, cancelReason: '' }) },
@@ -195,9 +225,14 @@ Page({
   cancelEditNote() { this.setData({ isEditingNote: false, editNote: this.data.booking._adminNote || '' }) },
   saveNote() {
     const app = getApp()
-    app.updateAdminNote(this.data.booking.id, this.data.editNote)
-    this.setData({ booking: app.getBookingById(this.data.booking.id), isEditingNote: false })
-    wx.showToast({ title: '已保存', icon: 'success' })
+    this._runBookingAction(
+      () => app.updateAdminNote(this.data.booking.id, this.data.editNote),
+      '已保存',
+      () => {
+        this.setData({ isEditingNote: false })
+        this._refreshBooking()
+      }
+    )
   },
   onNoteInput(e) { this.setData({ editNote: e.detail.value }) },
 
@@ -207,9 +242,14 @@ Page({
   saveFollowUp() {
     if (!this.data.newFollowUp.trim()) return
     const app = getApp()
-    app.addFollowUpRecord(this.data.booking.id, this.data.newFollowUp.trim())
-    this.setData({ booking: app.getBookingById(this.data.booking.id), isEditingFollowUp: false, newFollowUp: '' })
-    wx.showToast({ title: '已添加', icon: 'success' })
+    this._runBookingAction(
+      () => app.addFollowUpRecord(this.data.booking.id, this.data.newFollowUp.trim()),
+      '已添加',
+      () => {
+        this.setData({ isEditingFollowUp: false, newFollowUp: '' })
+        this._refreshBooking()
+      }
+    )
   },
   onFollowUpInput(e) { this.setData({ newFollowUp: e.detail.value }) },
 
@@ -227,13 +267,8 @@ Page({
         _immediateSatisfaction: b._immediateSatisfaction || 0,
         _comfortSatisfaction: b._comfortSatisfaction || 0,
         _productFeedback: b._productFeedback || '',
-        _day1FollowUp: b._day1FollowUp || '',
         _day30FollowUp: b._day30FollowUp || '',
-        _day90FollowUp: b._day90FollowUp || '',
-        _photos: [...(b._photos || [])],
-        _beforePhotos: [...(b._beforePhotos || [])],
-        _halfPhotos: [...(b._halfPhotos || [])],
-        _afterPhotos: [...(b._afterPhotos || [])]
+        _day90FollowUp: b._day90FollowUp || ''
       }
     })
   },
@@ -266,6 +301,7 @@ Page({
   },
 
   _doSaveStaff(app, ed, booking) {
+    wx.showLoading({ title: '正在保存', mask: true })
     app.updateStaffData(this.data.booking.id, {
       _clientManager: ed._clientManager,
       _totalEnergy: ed._totalEnergy,
@@ -275,24 +311,22 @@ Page({
       _immediateSatisfaction: ed._immediateSatisfaction,
       _comfortSatisfaction: ed._comfortSatisfaction,
       _productFeedback: ed._productFeedback,
-      _day1FollowUp: ed._day1FollowUp,
       _day30FollowUp: ed._day30FollowUp,
       _day90FollowUp: ed._day90FollowUp,
-      _photos: ed._photos,
-      _beforePhotos: ed._beforePhotos,
-      _halfPhotos: ed._halfPhotos,
-      _afterPhotos: ed._afterPhotos
+      _status: booking._status === 'in_experience' ? 'completed' : undefined
     })
-    // 自动切换状态：体验中 → 已体验
-    if (booking._status === 'in_experience') {
-      app.updateBookingStatus(booking.id, 'completed')
-    }
-    this.setData({
-      booking: app.getBookingById(this.data.booking.id),
-      isEditingStaff: false
-    })
-    wx.showToast({ title: '已保存', icon: 'success' })
-    this._submitting = false
+      .then(() => {
+        this.setData({ isEditingStaff: false })
+        this._refreshBooking()
+        wx.showToast({ title: '已保存', icon: 'success' })
+      })
+      .catch(err => {
+        wx.showToast({ title: err.message || '保存失败，请重试', icon: 'none' })
+      })
+      .finally(() => {
+        wx.hideLoading()
+        this._submitting = false
+      })
   },
   onStaffField(e) {
     const key = e.currentTarget.dataset.key
@@ -303,9 +337,11 @@ Page({
     this.setData({ [`editStaff.${key}`]: Number(e.detail.value) + 1 })
   },
 
-  // ===== 三栏分类照片上传 =====
-  chooseCompPhoto(e) {
+  // ===== 三个时间点的体验后照片 =====
+  chooseComparePhoto(e) {
     const type = e.currentTarget.dataset.type
+    const key = this._comparePhotoField(type)
+    if (!key || this._actionPending) return
     wx.chooseMedia({
       count: 1,
       mediaType: ['image'],
@@ -313,65 +349,33 @@ Page({
       sourceType: ['album', 'camera'],
       success: (res) => {
         const photo = { path: res.tempFiles[0].tempFilePath, name: `photo_${Date.now()}.jpg` }
-        this.setData({ [`editStaff._${type}Photos`]: [photo] })
+        const app = getApp()
+        this._runBookingAction(
+          () => app.uploadImage(photo.path, `booking/${this.data.booking.id}/${type}`)
+            .then(fileID => app.updateStaffData(this.data.booking.id, {
+              [key]: [{ ...photo, path: fileID, fileID }]
+            })),
+          '上传成功'
+        )
       }
     })
   },
 
-  delCompPhoto(e) {
+  deleteComparePhoto(e) {
     const type = e.currentTarget.dataset.type
+    const key = this._comparePhotoField(type)
+    if (!key) return
     wx.showModal({
       title: '确认删除',
       content: '确定要删除这张照片吗？',
       success: (res) => {
-        if (res.confirm) this.setData({ [`editStaff._${type}Photos`]: [] })
+        if (!res.confirm) return
+        const app = getApp()
+        this._runBookingAction(
+          () => app.updateStaffData(this.data.booking.id, { [key]: [] }),
+          '已删除'
+        )
       }
-    })
-  },
-
-  // ===== 照片上传 =====
-  startUploadPhoto() {
-    const booking = this.data.booking
-    // 体验中：仅体验前+半侧脸；已体验：全部三种
-    const isInExp = booking._status === 'in_experience'
-    const itemList = isInExp ? ['体验前', '半侧脸对比'] : ['体验前', '半侧脸对比', '体验后']
-    wx.showActionSheet({
-      itemList: itemList,
-      success: (res) => {
-        const types = isInExp ? ['before', 'half'] : ['before', 'half', 'after']
-        const type = types[res.tapIndex]
-        wx.chooseMedia({
-          count: 1,
-          mediaType: ['image'],
-          sizeType: ['compressed'],
-          sourceType: ['album', 'camera'],
-          success: (res) => {
-            const photo = { path: res.tempFiles[0].tempFilePath, name: `photo_${Date.now()}.jpg` }
-            const app = getApp()
-            const key = `_${type}Photos`
-            const currentPhotos = booking[key] || []
-            app.updateStaffData(booking.id, { [key]: [...currentPhotos, photo] })
-            this._refreshBooking()
-            wx.showToast({ title: '上传成功', icon: 'success' })
-          }
-        })
-      }
-    })
-  },
-
-  previewPhoto(e) {
-    const idx = Number(e.currentTarget.dataset.idx)
-    const urls = this.data.booking._photos.map(p => p.path)
-    wx.previewImage({ current: urls[idx], urls })
-  },
-
-  deletePhoto(e) {
-    const idx = Number(e.currentTarget.dataset.idx)
-    const app = getApp()
-    app.removePhoto(this.data.booking.id, idx)
-    this.setData({
-      booking: app.getBookingById(this.data.booking.id),
-      'editStaff._photos': this.data.booking._photos
     })
   },
 
@@ -406,9 +410,10 @@ Page({
       cancelText: '取消',
       success: (res) => {
         if (res.confirm) {
-          app.updateBookingStatus(booking.id, 'in_experience')
-          this._refreshBooking()
-          wx.showToast({ title: '状态已更新', icon: 'success' })
+          this._runBookingAction(
+            () => app.updateBookingStatus(booking.id, 'in_experience'),
+            '状态已更新'
+          )
         }
       }
     })
@@ -431,10 +436,14 @@ Page({
         confirmColor: '#DC2626',
         success: (res) => {
           if (res.confirm) {
-            app.confirmBooking(id, '管理员')
-            app.globalData._needRefresh = true
-            wx.showToast({ title: '已确认预约', icon: 'success' })
-            this._refreshBooking()
+            this._runBookingAction(
+              () => app.confirmBooking(id, '管理员'),
+              '已确认预约',
+              () => {
+                app.globalData._needRefresh = true
+                this._refreshBooking()
+              }
+            )
           }
         }
       })
@@ -447,10 +456,14 @@ Page({
       cancelText: '取消',
       success: (res) => {
         if (res.confirm) {
-          app.confirmBooking(id, '管理员')
-          app.globalData._needRefresh = true
-          wx.showToast({ title: '已确认预约', icon: 'success' })
-          this._refreshBooking()
+          this._runBookingAction(
+            () => app.confirmBooking(id, '管理员'),
+            '已确认预约',
+            () => {
+              app.globalData._needRefresh = true
+              this._refreshBooking()
+            }
+          )
         }
       }
     })
@@ -470,14 +483,14 @@ Page({
       cancelText: '取消',
       success: (res) => {
         if (res.confirm) {
-          const ok = app.rejectBooking(id, (res.content || '').trim())
-          if (ok) {
-            app.globalData._needRefresh = true
-            wx.showToast({ title: '已拒绝', icon: 'none' })
-            this._refreshBooking()
-          } else {
-            wx.showToast({ title: '当前状态不可拒绝', icon: 'none' })
-          }
+          this._runBookingAction(
+            () => app.rejectBooking(id, (res.content || '').trim()),
+            '已拒绝',
+            () => {
+              app.globalData._needRefresh = true
+              this._refreshBooking()
+            }
+          )
         }
       }
     })

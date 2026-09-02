@@ -1,8 +1,10 @@
 <nav-bar title="时段管理" showBack="{{true}}"></nav-bar>
 <view class="page">
   <view class="action-bar">
-    <view class="save-btn" bindtap="saveSchedule">保存营业时段</view>
-    <text class="action-hint">点击日期展开时段开关</text>
+    <view class="save-btn {{loading || saving || loadError ? 'disabled' : ''}}" bindtap="saveSchedule">
+      {{saving ? '保存中…' : '保存营业时段'}}
+    </view>
+    <text class="action-hint">{{loading ? '正在读取云端时段…' : (loadError ? '读取失败，请返回后重新进入' : '点击日期展开时段开关')}}</text>
   </view>
 
   <view class="hint">
@@ -10,7 +12,7 @@
   </view>
 
   <!-- 日期列表 -->
-  <scroll-view scroll-y class="date-list">
+  <scroll-view wx:if="{{!loading}}" scroll-y class="date-list">
     <view class="date-item {{selectedDate === item.date ? 'active' : ''}}"
       wx:for="{{dateList}}" wx:key="date" data-date="{{item.date}}" bindtap="selectDate">
       <view class="date-left">

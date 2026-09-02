@@ -21,6 +21,7 @@
   font-weight: 600;
   box-shadow: 0 8rpx 24rpx rgba(59, 7, 100, 0.2);
 }
+.save-btn.disabled { opacity: 0.55; }
 
 .hint { padding: 12rpx 24rpx; background: #F3F4F6; margin: 0 24rpx 12rpx; border-radius: 8rpx; }
 .hint text { font-size: 24rpx; color: #6B7280; }

@@ -72,17 +72,6 @@
     <text class="channel-info-value">{{booking.channel === 'medical' ? '医疗渠道' : '生美渠道'}}{{booking.trainerName ? ' · ' + booking.trainerName : ''}}</text>
   </view>
 
-  <!-- 回访反馈快捷状态 -->
-  <view class="feedback-status-bar" wx:if="{{booking._status === 'visited' || booking._status === 'in_experience' || booking._status === 'completed'}}">
-    <text class="fb-bar-label">用户回访</text>
-    <view class="fb-bar-tags">
-      <view wx:if="{{booking._feedback30}}" class="fb-bar-tag done">30天</view>
-      <view wx:if="{{!booking._feedback30}}" class="fb-bar-tag pending">30天</view>
-      <view wx:if="{{booking._feedback90}}" class="fb-bar-tag done">90天</view>
-      <view wx:if="{{!booking._feedback90}}" class="fb-bar-tag pending">90天</view>
-    </view>
-  </view>
-
 </view>
 
 <!-- ===== 用户填写（灰色字段） ===== -->
@@ -137,7 +126,7 @@
 
   <!-- 只读模式 -->
   <view wx:if="{{!isEditingStaff}}">
-    <view wx:if="{{!booking._clientManager && !booking._totalEnergy && !booking._shotDistribution && !booking._maxLevel && !booking.deviceModel && !booking._immediateSatisfaction && !booking._comfortSatisfaction && booking._photos.length === 0 && booking._beforePhotos.length === 0 && booking._halfPhotos.length === 0 && booking._afterPhotos.length === 0 && !booking._productFeedback && !booking._day1FollowUp && !booking._day30FollowUp && !booking._day90FollowUp}}" class="note-empty">体验完成后由工作人员补录</view>
+    <view wx:if="{{!booking._clientManager && !booking._totalEnergy && !booking._shotDistribution && !booking._maxLevel && !booking.deviceModel && !booking._immediateSatisfaction && !booking._comfortSatisfaction && !booking._productFeedback && !booking._day30FollowUp && !booking._day90FollowUp}}" class="note-empty">体验完成后由工作人员补录</view>
     <view wx:else>
       <view class="info-grid">
         <view class="info-cell" wx:if="{{booking._clientManager}}">
@@ -161,24 +150,13 @@
           <text class="cell-value">{{booking.deviceModel}}</text>
         </view>
       </view>
-      <!-- 照片 -->
-      <view class="photo-section" wx:if="{{booking._photos.length > 0}}">
-        <view class="cell-label">上传照片</view>
-        <view class="photo-grid">
-          <image wx:for="{{booking._photos}}" wx:key="name" src="{{item.path}}" mode="aspectFill" class="photo-item" data-idx="{{index}}" bindtap="previewPhoto"/>
-        </view>
-      </view>
       <view class="info-cell full" wx:if="{{booking._productFeedback}}">
         <text class="cell-label">产品优化意见</text>
         <text class="cell-value">{{booking._productFeedback}}</text>
       </view>
       <!-- 回访记录 -->
-      <view wx:if="{{booking._day1FollowUp || booking._day30FollowUp || booking._day90FollowUp}}">
+      <view wx:if="{{booking._day30FollowUp || booking._day90FollowUp}}">
         <view class="cell-label" style="margin-top:16rpx;">回访记录</view>
-        <view class="info-cell full" wx:if="{{booking._day1FollowUp}}" style="margin-top:10rpx;">
-          <text class="cell-label">Day1</text>
-          <text class="cell-value">{{booking._day1FollowUp}}</text>
-        </view>
         <view class="info-cell full" wx:if="{{booking._day30FollowUp}}" style="margin-top:10rpx;">
           <text class="cell-label">Day30</text>
           <text class="cell-value">{{booking._day30FollowUp}}</text>
@@ -221,37 +199,6 @@
         <input placeholder="如：MJ6-PRO-001" value="{{editStaff.deviceModel}}" bindinput="onStaffField" data-key="deviceModel" placeholder-class="ph"/>
       </view>
 
-      <!-- 上传照片（三栏分类） -->
-      <view class="exp-field">
-        <text class="exp-label">上传照片</text>
-        <view class="photo-compare-upload">
-          <view class="comp-upload-col">
-            <text class="comp-upload-label">体验前</text>
-            <view class="comp-upload-area" bindtap="chooseCompPhoto" data-type="before">
-              <image wx:if="{{editStaff._beforePhotos && editStaff._beforePhotos.length > 0}}" src="{{editStaff._beforePhotos[0].path}}" mode="aspectFill" class="comp-upload-photo"/>
-              <text wx:else class="comp-upload-add">+</text>
-            </view>
-            <text class="comp-del" wx:if="{{editStaff._beforePhotos && editStaff._beforePhotos.length > 0}}" bindtap="delCompPhoto" data-type="before">删除</text>
-          </view>
-          <view class="comp-upload-col">
-            <text class="comp-upload-label">半侧脸对比</text>
-            <view class="comp-upload-area" bindtap="chooseCompPhoto" data-type="half">
-              <image wx:if="{{editStaff._halfPhotos && editStaff._halfPhotos.length > 0}}" src="{{editStaff._halfPhotos[0].path}}" mode="aspectFill" class="comp-upload-photo"/>
-              <text wx:else class="comp-upload-add">+</text>
-            </view>
-            <text class="comp-del" wx:if="{{editStaff._halfPhotos && editStaff._halfPhotos.length > 0}}" bindtap="delCompPhoto" data-type="half">删除</text>
-          </view>
-          <view class="comp-upload-col">
-            <text class="comp-upload-label">体验后</text>
-            <view class="comp-upload-area" bindtap="chooseCompPhoto" data-type="after">
-              <image wx:if="{{editStaff._afterPhotos && editStaff._afterPhotos.length > 0}}" src="{{editStaff._afterPhotos[0].path}}" mode="aspectFill" class="comp-upload-photo"/>
-              <text wx:else class="comp-upload-add">+</text>
-            </view>
-            <text class="comp-del" wx:if="{{editStaff._afterPhotos && editStaff._afterPhotos.length > 0}}" bindtap="delCompPhoto" data-type="after">删除</text>
-          </view>
-        </view>
-      </view>
-
       <view class="exp-field">
         <text class="exp-label">产品优化意见</text>
         <textarea class="edit-textarea" value="{{editStaff._productFeedback}}" bindinput="onStaffField" data-key="_productFeedback" placeholder="客户对产品/体验的优化建议..." maxlength="500" placeholder-class="ph"/>
@@ -260,10 +207,6 @@
       <!-- 回访记录 -->
       <view class="exp-field">
         <text class="exp-label">回访记录</text>
-      </view>
-      <view class="exp-field">
-        <text class="exp-label sub">Day1 回访</text>
-        <textarea class="edit-textarea" value="{{editStaff._day1FollowUp}}" bindinput="onStaffField" data-key="_day1FollowUp" placeholder="是否回访/长期效果反馈/是否有不良反应" maxlength="500" placeholder-class="ph"/>
       </view>
       <view class="exp-field">
         <text class="exp-label sub">Day30 回访</text>
@@ -287,30 +230,32 @@
 <view class="section" wx:if="{{booking._status === 'in_experience' || booking._status === 'completed'}}">
   <view class="section-header">
     <view class="section-title">照片对比</view>
-    <view class="btn-edit" bindtap="startUploadPhoto" wx:if="{{booking._status === 'in_experience' || booking._status === 'completed'}}">上传</view>
+    <text class="photo-upload-hint">点击方框上传或替换</text>
   </view>
-  <view wx:if="{{(!booking._beforePhotos || booking._beforePhotos.length === 0) && (!booking._afterPhotos || booking._afterPhotos.length === 0) && (!booking._halfPhotos || booking._halfPhotos.length === 0)}}" class="note-empty">体验后由工作人员上传照片进行效果对比</view>
-  <view wx:else class="photo-compare">
+  <view class="photo-compare">
     <view class="comp-col">
-      <view class="comp-label">体验前</view>
-      <view class="comp-area">
-        <image wx:if="{{booking._beforePhotos.length > 0}}" src="{{booking._beforePhotos[0].path}}" mode="aspectFill" class="comp-photo" data-idx="0" data-type="before" bindtap="previewCompPhoto"></image>
-        <view wx:else class="comp-empty">暂无</view>
+      <view class="comp-label">体验后立即</view>
+      <view class="comp-area uploadable" data-type="immediate" bindtap="chooseComparePhoto">
+        <image wx:if="{{booking._immediatePhotos.length > 0}}" src="{{booking._immediatePhotos[0].path}}" mode="aspectFill" class="comp-photo" data-idx="0" data-type="immediate" catchtap="previewCompPhoto"></image>
+        <view wx:else class="comp-empty add-photo">＋<text>上传</text></view>
       </view>
+      <view class="comp-del" wx:if="{{booking._immediatePhotos.length > 0}}" data-type="immediate" catchtap="deleteComparePhoto">删除</view>
     </view>
     <view class="comp-col">
-      <view class="comp-label">半侧脸对比</view>
-      <view class="comp-area">
-        <image wx:if="{{booking._halfPhotos.length > 0}}" src="{{booking._halfPhotos[0].path}}" mode="aspectFill" class="comp-photo" data-idx="0" data-type="half" bindtap="previewCompPhoto"></image>
-        <view wx:else class="comp-empty">暂无</view>
+      <view class="comp-label">30天后</view>
+      <view class="comp-area uploadable" data-type="day30" bindtap="chooseComparePhoto">
+        <image wx:if="{{booking._day30Photos.length > 0}}" src="{{booking._day30Photos[0].path}}" mode="aspectFill" class="comp-photo" data-idx="0" data-type="day30" catchtap="previewCompPhoto"></image>
+        <view wx:else class="comp-empty add-photo">＋<text>上传</text></view>
       </view>
+      <view class="comp-del" wx:if="{{booking._day30Photos.length > 0}}" data-type="day30" catchtap="deleteComparePhoto">删除</view>
     </view>
     <view class="comp-col">
-      <view class="comp-label">体验后</view>
-      <view class="comp-area">
-        <image wx:if="{{booking._afterPhotos.length > 0}}" src="{{booking._afterPhotos[0].path}}" mode="aspectFill" class="comp-photo" data-idx="0" data-type="after" bindtap="previewCompPhoto"></image>
-        <view wx:else class="comp-empty">暂无</view>
+      <view class="comp-label">90天后</view>
+      <view class="comp-area uploadable" data-type="day90" bindtap="chooseComparePhoto">
+        <image wx:if="{{booking._day90Photos.length > 0}}" src="{{booking._day90Photos[0].path}}" mode="aspectFill" class="comp-photo" data-idx="0" data-type="day90" catchtap="previewCompPhoto"></image>
+        <view wx:else class="comp-empty add-photo">＋<text>上传</text></view>
       </view>
+      <view class="comp-del" wx:if="{{booking._day90Photos.length > 0}}" data-type="day90" catchtap="deleteComparePhoto">删除</view>
     </view>
   </view>
 </view>
