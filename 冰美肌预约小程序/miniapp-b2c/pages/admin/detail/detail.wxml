@@ -72,6 +72,16 @@
     <text class="channel-info-value">{{booking.channel === 'medical' ? '医疗渠道' : '生美渠道'}}{{booking.trainerName ? ' · ' + booking.trainerName : ''}}</text>
   </view>
 
+  <view class="staff-notify-bar notify-{{staffNotify.status}}" wx:if="{{staffNotify}}">
+    <view class="staff-notify-main">
+      <text class="staff-notify-label">操作师预约提醒</text>
+      <text class="staff-notify-status">{{staffNotify.label}}</text>
+      <text class="staff-notify-time" wx:if="{{staffNotify.updatedAt}}">最近处理：{{staffNotify.updatedAt}}</text>
+      <text class="staff-notify-error" wx:if="{{staffNotify.error}}">{{staffNotify.error}}</text>
+    </view>
+    <view class="staff-notify-retry" wx:if="{{staffNotify.canRetry}}" bindtap="retryStaffNotify">重新发送</view>
+  </view>
+
 </view>
 
 <!-- ===== 用户填写（灰色字段） ===== -->
@@ -226,43 +236,34 @@
 </view>
 
 <!-- ===== 照片对比 ===== -->
-<!-- 仅体验中/已体验显示 -->
-<view class="section" wx:if="{{booking._status === 'in_experience' || booking._status === 'completed'}}">
+<!-- 到店后可上传体验前照片，体验中/完成后继续上传体验后照片 -->
+<view class="section" wx:if="{{booking._status === 'visited' || booking._status === 'in_experience' || booking._status === 'completed'}}">
   <view class="section-header">
     <view class="section-title">照片对比</view>
     <text class="photo-upload-hint">点击方框上传或替换</text>
   </view>
-  <view class="photo-compare">
-    <view class="comp-col">
-      <view class="comp-label">体验后立即</view>
-      <view class="comp-area uploadable" data-type="immediate" bindtap="chooseComparePhoto">
-        <image wx:if="{{booking._immediatePhotos.length > 0}}" src="{{booking._immediatePhotos[0].path}}" mode="aspectFill" class="comp-photo" data-idx="0" data-type="immediate" catchtap="previewCompPhoto"></image>
-        <view wx:else class="comp-empty add-photo">＋<text>上传</text></view>
+
+  <block wx:for="{{photoGroups}}" wx:for-item="group" wx:key="type">
+    <view class="photo-group-title {{index > 0 ? 'photo-group-after' : ''}}">{{group.title}} · 5张</view>
+    <view class="photo-compare">
+      <view class="comp-col" wx:for="{{group.items}}" wx:for-item="photo" wx:key="index">
+        <view class="comp-label">{{photo.angle}}</view>
+        <view class="comp-area uploadable" data-type="{{group.type}}" data-idx="{{photo.index}}" bindtap="chooseComparePhoto">
+          <image wx:if="{{photo.path}}" src="{{photo.path}}" mode="aspectFill" class="comp-photo" data-idx="{{photo.index}}" data-type="{{group.type}}" catchtap="previewCompPhoto"></image>
+          <view wx:else class="comp-empty add-photo">＋<text>上传</text></view>
+        </view>
+        <view class="comp-actions" wx:if="{{photo.path}}">
+          <view class="comp-change" data-type="{{group.type}}" data-idx="{{photo.index}}" catchtap="chooseComparePhoto">更换</view>
+          <view class="comp-del" data-type="{{group.type}}" data-idx="{{photo.index}}" catchtap="deleteComparePhoto">删除</view>
+        </view>
       </view>
-      <view class="comp-del" wx:if="{{booking._immediatePhotos.length > 0}}" data-type="immediate" catchtap="deleteComparePhoto">删除</view>
     </view>
-    <view class="comp-col">
-      <view class="comp-label">30天后</view>
-      <view class="comp-area uploadable" data-type="day30" bindtap="chooseComparePhoto">
-        <image wx:if="{{booking._day30Photos.length > 0}}" src="{{booking._day30Photos[0].path}}" mode="aspectFill" class="comp-photo" data-idx="0" data-type="day30" catchtap="previewCompPhoto"></image>
-        <view wx:else class="comp-empty add-photo">＋<text>上传</text></view>
-      </view>
-      <view class="comp-del" wx:if="{{booking._day30Photos.length > 0}}" data-type="day30" catchtap="deleteComparePhoto">删除</view>
-    </view>
-    <view class="comp-col">
-      <view class="comp-label">90天后</view>
-      <view class="comp-area uploadable" data-type="day90" bindtap="chooseComparePhoto">
-        <image wx:if="{{booking._day90Photos.length > 0}}" src="{{booking._day90Photos[0].path}}" mode="aspectFill" class="comp-photo" data-idx="0" data-type="day90" catchtap="previewCompPhoto"></image>
-        <view wx:else class="comp-empty add-photo">＋<text>上传</text></view>
-      </view>
-      <view class="comp-del" wx:if="{{booking._day90Photos.length > 0}}" data-type="day90" catchtap="deleteComparePhoto">删除</view>
-    </view>
-  </view>
+  </block>
 </view>
 
 <!-- ===== 回访反馈 ===== -->
 <!-- 仅已体验状态显示 -->
-<view class="section" wx:if="{{booking._status === 'completed' && (feedback24 || feedback30 || feedback90)}}">
+<view class="section" wx:if="{{false}}">
   <view class="section-title">回访反馈</view>
 
   <view class="feedback-block" wx:if="{{feedback24}}">

@@ -1,0 +1,132 @@
+page {
+  min-height: 100%;
+  background: #F6F7F8;
+  color: #1F2937;
+}
+
+.page {
+  padding: 24rpx 24rpx calc(56rpx + env(safe-area-inset-bottom));
+}
+
+.loading {
+  padding: 120rpx 0;
+  text-align: center;
+  color: #9CA3AF;
+  font-size: 28rpx;
+}
+
+.intro-card {
+  display: flex;
+  flex-direction: column;
+  padding: 32rpx;
+  background: #FFFFFF;
+  border-radius: 20rpx;
+  box-shadow: 0 8rpx 28rpx rgba(31, 41, 55, 0.05);
+}
+
+.intro-title {
+  font-size: 36rpx;
+  line-height: 1.4;
+  font-weight: 700;
+  color: #3B0764;
+}
+
+.intro-meta {
+  margin-top: 12rpx;
+  font-size: 26rpx;
+  color: #6B7280;
+}
+
+.intro-tip {
+  margin-top: 20rpx;
+  font-size: 26rpx;
+  line-height: 1.7;
+  color: #4B5563;
+}
+
+.photo-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20rpx;
+  margin-top: 24rpx;
+}
+
+.photo-card {
+  padding: 20rpx;
+  background: #FFFFFF;
+  border-radius: 18rpx;
+  box-shadow: 0 6rpx 20rpx rgba(31, 41, 55, 0.04);
+}
+
+.angle-label {
+  display: block;
+  margin-bottom: 14rpx;
+  text-align: center;
+  font-size: 27rpx;
+  font-weight: 600;
+  color: #374151;
+}
+
+.photo-box {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  overflow: hidden;
+  border-radius: 14rpx;
+  background: #F3F4F6;
+}
+
+.photo-box.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  border: 2rpx dashed #C4B5FD;
+  background: #FAF8FF;
+}
+
+.photo-image {
+  width: 100%;
+  height: 100%;
+}
+
+.plus {
+  font-size: 54rpx;
+  line-height: 1;
+  font-weight: 300;
+  color: #7C3AED;
+}
+
+.upload-label {
+  margin-top: 12rpx;
+  font-size: 24rpx;
+  color: #6D28D9;
+}
+
+.replace-hint,
+.delete-btn {
+  position: absolute;
+  bottom: 12rpx;
+  padding: 9rpx 15rpx;
+  border-radius: 999rpx;
+  font-size: 22rpx;
+  color: #FFFFFF;
+  background: rgba(31, 41, 55, 0.72);
+}
+
+.replace-hint {
+  left: 12rpx;
+}
+
+.delete-btn {
+  right: 12rpx;
+  background: rgba(185, 28, 28, 0.82);
+}
+
+.save-hint {
+  padding: 32rpx 0 12rpx;
+  text-align: center;
+  font-size: 24rpx;
+  color: #9CA3AF;
+}

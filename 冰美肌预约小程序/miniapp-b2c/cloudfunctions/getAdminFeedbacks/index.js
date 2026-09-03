@@ -12,13 +12,18 @@ async function isAdmin(openId) {
 }
 
 exports.main = async (event) => {
+  event = event || {}
   const openId = cloud.getWXContext().OPENID
   try {
     if (!openId || !(await isAdmin(openId))) {
       return { success: false, data: [], error: '无管理员权限' }
     }
-    const limit = Math.min(Math.max(Number(event && event.limit) || 200, 1), 500)
-    const res = await db.collection('feedbacks').limit(limit).get()
+    const limit = Math.min(Math.max(Number(event.limit) || 200, 1), 500)
+    const recordId = String(event.recordId || '').trim()
+    const query = recordId
+      ? db.collection('feedbacks').where({ recordId })
+      : db.collection('feedbacks')
+    const res = await query.limit(limit).get()
     return { success: true, data: res.data || [] }
   } catch (err) {
     console.error('[getAdminFeedbacks]', err)

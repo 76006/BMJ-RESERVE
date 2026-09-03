@@ -1,0 +1,9 @@
+{
+  "name": "sendFollowupReminders",
+  "version": "1.0.0",
+  "description": "30天和90天客户照片上传订阅提醒",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3"
+  }
+}

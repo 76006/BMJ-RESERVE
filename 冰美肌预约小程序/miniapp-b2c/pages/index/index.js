@@ -352,7 +352,7 @@ Page({
       wx.hideLoading()
       this._submitting = false
       if (booking) {
-        this.requestSubscription(booking.id)
+        this.requestSubscription(booking)
       } else {
         wx.showToast({ title: error || '提交失败，请重试', icon: 'none' })
         this.filterAvailableSlots(this.data.visitDate)
@@ -360,28 +360,58 @@ Page({
     })
   },
 
-  requestSubscription(bookingId) {
+  requestSubscription(booking) {
+    const APPOINTMENT_TEMPLATE_ID = 'A09emeoi_5a_1s7UsMD7Twuj5cfYOC-Y1999bCtb-sI'
+    const DAY30_TEMPLATE_ID = 'nV6Oc0UnmsGkZbpcBXBcUPRpkRzR4B__uX5TU_M9xUo'
+    const DAY90_TEMPLATE_ID = 'j7okEfYaR9VoT0M3Lt2T79tUjWinkC_1CjEMmfCpkSw'
+    const finish = () => {
+      setTimeout(() => {
+        this.resetForm()
+        wx.switchTab({ url: '/pages/mine/mine' })
+      }, 1200)
+    }
+    const app = getApp()
+    const isBookingForAnotherCustomer = app.globalData.isAdmin &&
+      booking && booking._openid !== app.globalData.openId
+    if (isBookingForAnotherCustomer) {
+      wx.showModal({
+        title: '代预约已提交',
+        content: '客户使用本人微信授权预约手机号后，这条预约会自动绑定到客户账号。',
+        showCancel: false,
+        success: finish,
+        fail: finish
+      })
+      return
+    }
     wx.showModal({
       title: '预约成功',
-      content: '我们将在体验当天和30/90天后向您发送护理贴士和反馈提醒。是否允许接收消息通知？',
+      content: '允许通知后，您可收到预约结果，以及体验后30天、90天的照片上传提醒。',
       confirmText: '允许',
       cancelText: '暂不',
       success: (res) => {
         if (res.confirm) {
-          const TEMPLATE_ID = 'A09emeoi_5a_1s7UsMD7Twuj5cfYOC-Y1999bCtb-sI'
           wx.requestSubscribeMessage({
-            tmplIds: [TEMPLATE_ID],
-            success: () => {},
-            fail: () => {}
+            tmplIds: [APPOINTMENT_TEMPLATE_ID, DAY30_TEMPLATE_ID, DAY90_TEMPLATE_ID],
+            success: (result) => {
+              const acceptedCount = [APPOINTMENT_TEMPLATE_ID, DAY30_TEMPLATE_ID, DAY90_TEMPLATE_ID]
+                .filter(id => result[id] === 'accept').length
+              wx.showToast({
+                title: `已开启 ${acceptedCount}/3 项`,
+                icon: 'none',
+                duration: 1200
+              })
+              finish()
+            },
+            fail: () => {
+              wx.showToast({ title: '通知授权未完成', icon: 'none', duration: 1200 })
+              finish()
+            }
           })
-          wx.showToast({ title: '已开启通知', icon: 'success', duration: 1500 })
+          return
         }
-        // 跳转到我的页面
-        setTimeout(() => {
-          this.resetForm()
-          wx.switchTab({ url: '/pages/mine/mine' })
-        }, 1500)
-      }
+        finish()
+      },
+      fail: finish
     })
   },
 

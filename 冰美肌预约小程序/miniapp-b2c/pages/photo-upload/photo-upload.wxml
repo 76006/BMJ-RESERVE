@@ -1,0 +1,28 @@
+<view class="page">
+  <view class="loading" wx:if="{{loading}}">正在读取预约...</view>
+
+  <block wx:elif="{{booking}}">
+    <view class="intro-card">
+      <text class="intro-title">{{stageTitle}}</text>
+      <text class="intro-meta">上次体验：{{booking.visitDate}} {{booking.visitTime}}</text>
+      <text class="intro-tip">请在自然光线下依次拍摄五个角度。点击方框上传，已上传的照片可预览或删除。</text>
+    </view>
+
+    <view class="photo-grid">
+      <view class="photo-card" wx:for="{{photos}}" wx:key="index">
+        <text class="angle-label">{{item.angle}}</text>
+        <view class="photo-box" wx:if="{{item.path}}" data-index="{{item.index}}" bindtap="previewPhoto">
+          <image class="photo-image" src="{{item.path}}" mode="aspectFill" />
+          <view class="replace-hint" data-index="{{item.index}}" catchtap="choosePhoto">更换</view>
+          <view class="delete-btn" data-index="{{item.index}}" catchtap="deletePhoto">删除</view>
+        </view>
+        <view class="photo-box empty" wx:else data-index="{{item.index}}" bindtap="choosePhoto">
+          <text class="plus">+</text>
+          <text class="upload-label">{{uploadingIndex === item.index ? '上传中' : '点击上传'}}</text>
+        </view>
+      </view>
+    </view>
+
+    <view class="save-hint">每张照片上传后会自动保存，无需再次提交</view>
+  </block>
+</view>

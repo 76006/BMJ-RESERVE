@@ -1,29 +1,30 @@
 /**
- * manageAdmins - 仅超级管理员可调用的人员管理接口
+ * manageAdmins - 管理员人员管理接口（staff / admin 两级）
  */
 const cloud = require('wx-server-sdk')
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 const db = cloud.database()
 
-async function requireSuperAdmin() {
+function normalizeRole(role) {
+  return role === 'admin' || role === 'superadmin' ? 'admin' : 'staff'
+}
+
+async function requireAdmin() {
   const openId = cloud.getWXContext().OPENID
   if (!openId) return null
   const res = await db.collection('admins')
-    .where({ openId, active: true, role: 'superadmin' })
+    .where({ openId, active: true })
     .limit(1)
     .get()
-  return res.data && res.data[0] ? res.data[0] : null
-}
-
-function normalizeRole(role) {
-  return role === 'admin' ? 'admin' : 'staff'
+  const admin = res.data && res.data[0] ? res.data[0] : null
+  return admin && normalizeRole(admin.role) === 'admin' ? admin : null
 }
 
 function publicAdmin(doc) {
   return {
     phone: doc.phone || '',
     name: doc.name || '',
-    role: doc.role || 'staff',
+    role: normalizeRole(doc.role),
     openId: doc.openId || '',
     createdAt: doc.createdAt || ''
   }
@@ -46,7 +47,7 @@ async function overview() {
   }
 }
 
-async function addAdmin(event) {
+async function addAdmin(event, caller) {
   const phone = String(event.phone || '').trim()
   const openId = String(event.openId || '').trim()
   const name = String(event.name || '').trim()
@@ -63,7 +64,9 @@ async function addAdmin(event) {
   const now = new Date().toISOString()
   if (exist.data && exist.data[0]) {
     const doc = exist.data[0]
-    if (doc.role === 'superadmin') return { ok: false, error: '不能通过人员管理修改超级管理员' }
+    if (doc.openId === caller.openId && role !== 'admin') {
+      return { ok: false, error: '不能把当前登录的管理员改为操作师' }
+    }
     await db.collection('admins').doc(doc._id).update({
       data: {
         phone: phone || doc.phone || '',
@@ -100,8 +103,8 @@ async function removeAdmin(event, caller) {
     : await db.collection('admins').where({ openId }).limit(1).get()
   const doc = res.data && res.data[0]
   if (!doc) return { ok: false, error: '未找到该人员' }
-  if (doc.role === 'superadmin' || doc.openId === caller.openId) {
-    return { ok: false, error: '不能移除超级管理员本人' }
+  if (doc.openId === caller.openId) {
+    return { ok: false, error: '不能移除当前登录的管理员账号' }
   }
   await db.collection('admins').doc(doc._id).update({
     data: {
@@ -116,11 +119,11 @@ async function removeAdmin(event, caller) {
 exports.main = async (event) => {
   event = event || {}
   try {
-    const caller = await requireSuperAdmin()
-    if (!caller) return { ok: false, error: '无权限：仅超级管理员可操作' }
+    const caller = await requireAdmin()
+    if (!caller) return { ok: false, error: '无权限：仅管理员可操作' }
     switch (event.action) {
       case 'overview': return await overview()
-      case 'add': return await addAdmin(event)
+      case 'add': return await addAdmin(event, caller)
       case 'remove': return await removeAdmin(event, caller)
       default: return { ok: false, error: '不支持的操作' }
     }

@@ -63,10 +63,11 @@ async function resolvePhone(event) {
 }
 
 function adminResult(admin, phone) {
+  const role = admin.role === 'admin' || admin.role === 'superadmin' ? 'admin' : 'staff'
   return {
     ok: true,
     isAdmin: true,
-    role: admin.role || 'staff',
+    role,
     name: admin.name || '管理员',
     phone: phone || admin.phone || ''
   }
@@ -105,14 +106,16 @@ exports.main = async (event) => {
       return userResult({
         ok: false,
         phone,
-        error: '该工作人员账号已绑定其他微信，请联系超级管理员重置'
+        error: '该工作人员账号已绑定其他微信，请联系管理员重置'
       })
     }
 
     const now = new Date().toISOString()
+    const normalizedRole = admin.role === 'admin' || admin.role === 'superadmin' ? 'admin' : 'staff'
     await db.collection('admins').doc(admin._id).update({
-      data: { openId, lastLoginAt: now, updatedAt: now }
+      data: { openId, role: normalizedRole, lastLoginAt: now, updatedAt: now }
     })
+    admin.role = normalizedRole
     return adminResult(admin, phone)
   } catch (err) {
     console.error('[loginByPhone]', err)

@@ -8,11 +8,24 @@ const STATUS_CN = {
   rejected: '预约失败'
 }
 
+const SUBSCRIBE_TEMPLATES = {
+  appointment: 'A09emeoi_5a_1s7UsMD7Twuj5cfYOC-Y1999bCtb-sI',
+  day30: 'nV6Oc0UnmsGkZbpcBXBcUPRpkRzR4B__uX5TU_M9xUo',
+  day90: 'j7okEfYaR9VoT0M3Lt2T79tUjWinkC_1CjEMmfCpkSw'
+}
+
+function localDateString(date) {
+  const value = date || new Date()
+  const pad = number => String(number).padStart(2, '0')
+  return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}`
+}
+
 Page({
   data: {
     isAdmin: false,
     adminName: '',
     adminRole: '',
+    identityLoading: true,
     previewRole: '',  // ''=实际角色 / 'user' / 'staff' / 'admin'
     isLoggedIn: false,  // 是否已手机号登录
     isDevtools: false,  // 是否开发工具环境
@@ -34,29 +47,39 @@ Page({
     pendingCount: 0,
     todayCount: 0,
     totalCount: 0,
-    todaySchedule: []
+    todaySchedule: [],
+    staffNotifyConfigured: null
   },
 
   onShow() {
+    this._pageVisible = true
     if (typeof this.getTabBar === 'function' && this.getTabBar()) {
       this.getTabBar().setData({ selected: 1 })
     }
     const app = getApp()
-    // 必须先确认当前微信 openId，再读取手机号、画像和预约缓存。
-    // 这样同一台手机切换微信号时不会短暂显示上一账号的数据。
-    if (!app.globalData.openId && !this._waitingIdentity) {
+
+    // OPENID 返回并不代表管理员权限已经查询完成。页面必须等待完整身份校验，
+    // 否则首次进入“我的”会先被渲染成普通用户，且之后不会自动切换。
+    if (!app.globalData._identityReady) {
+      this.setData({ identityLoading: true })
+      if (this._waitingIdentity) return
       this._waitingIdentity = true
-      app.getOpenId((openid) => {
+      app.whenIdentityReady(() => {
         this._waitingIdentity = false
-        if (!openid) {
-          this.setData({ isAdmin: false, isLoggedIn: false, bookings: [] })
-          wx.showToast({ title: '身份识别失败，请稍后重试', icon: 'none' })
-          return
-        }
-        this.onShow()
+        if (this._pageVisible) this._refreshCurrentView()
       })
       return
     }
+
+    this._refreshCurrentView()
+  },
+
+  onHide() {
+    this._pageVisible = false
+  },
+
+  _refreshCurrentView() {
+    const app = getApp()
     const sys = wx.getSystemInfoSync()
     const isDevtools = sys.platform === 'devtools'
 
@@ -77,24 +100,68 @@ Page({
     // 真机只信任 app 中已经由云函数确认的状态；开发工具允许本地视图预览。
     const isAdmin = app.globalData.isAdmin || (isDevtools && wx.getStorageSync('_isAdmin'))
     const isLoggedIn = !!wx.getStorageSync('_phoneVerified')
+    const rawRole = app.globalData.adminRole || wx.getStorageSync('_adminRole') || 'staff'
+    const adminRole = rawRole === 'admin' || rawRole === 'superadmin' ? 'admin' : 'staff'
 
     // 从管理子页面返回时保留原视角；从其他 Tab 再进入“我的”时恢复实际角色。
     const previewRole = this._preservePreviewRole ? this.data.previewRole : ''
     this._preservePreviewRole = false
 
+    const refreshSeq = (this._refreshSeq || 0) + 1
+    this._refreshSeq = refreshSeq
+    const hasReadyAdminData = isAdmin && app.globalData._cloudReady
     this.setData({
       isAdmin: isAdmin,
-      adminRole: app.globalData.adminRole || wx.getStorageSync('_adminRole') || '',
+      adminRole: adminRole,
       adminName: app.globalData.adminName || wx.getStorageSync('_adminName') || '管理员',
       previewRole: previewRole,
       isLoggedIn: isLoggedIn,
-      isDevtools: isDevtools
+      isDevtools: isDevtools,
+      identityLoading: isAdmin && !isDevtools && !hasReadyAdminData
     })
 
     if (isAdmin) {
-      this._loadAdminData()
+      this._loadStaffNotifyConfig()
+      // 启动阶段已经成功取得数据时先立即展示，再在后台更新一次。
+      if (hasReadyAdminData) this._loadAdminData()
+      // 每次进入工作台都从云端刷新全部预约；首次读取完成前不显示错误的 0。
+      if (!isDevtools && app._loadAllBookingsAsAdmin) {
+        app._loadAllBookingsAsAdmin().then(() => {
+          if (!this._pageVisible || refreshSeq !== this._refreshSeq) return
+          if (!app.globalData.isAdmin) {
+            this._refreshCurrentView()
+            return
+          }
+          this._loadAdminData()
+          this.setData({ identityLoading: false })
+        })
+      } else {
+        this._loadAdminData()
+        this.setData({ identityLoading: false })
+      }
     } else {
-      this._loadUserData()
+      if (this.data.staffNotifyConfigured !== null) {
+        this.setData({ staffNotifyConfigured: null })
+      }
+      if (!isLoggedIn) {
+        this._loadUserData()
+        this.setData({ identityLoading: false })
+        return
+      }
+      const hasReadyUserData = app.globalData._cloudReady
+      if (hasReadyUserData) {
+        this._loadUserData()
+        this._updateUserVisitSummary()
+      }
+      this.setData({ identityLoading: !hasReadyUserData })
+      if (app._loadOwnBookingsOnly) {
+        app._loadOwnBookingsOnly().then(() => {
+          if (!this._pageVisible || refreshSeq !== this._refreshSeq) return
+          this._loadUserData()
+          this._updateUserVisitSummary()
+          this.setData({ identityLoading: false })
+        })
+      }
     }
 
     // 开发工具下覆盖问候语（多用户模拟测试）
@@ -102,7 +169,13 @@ Page({
       this.setData({ greeting: '全流程测试' })
     }
 
-    // 计算体验次数和上次体验时间
+    if (isAdmin) {
+      this.setData({ bookings: [], visitCount: 0, lastVisitDate: '', isFirstVisit: true })
+    }
+  },
+
+  _updateUserVisitSummary() {
+    const app = getApp()
     const myBookings = app.getUserBookings ? app.getUserBookings() : []
     // 已体验/已完成的记录（含体验中）
     const doneBookings = myBookings.filter(b => b._status === 'visited' || b._status === 'in_experience' || b._status === 'completed')
@@ -116,7 +189,7 @@ Page({
       lastVisitDate = dates.length > 0 ? dates.reverse()[0] : ''
     }
     this.setData({
-      bookings: isAdmin ? [] : this.data.bookings,
+      bookings: myBookings,
       visitCount,
       lastVisitDate,
       isFirstVisit: visitCount === 0
@@ -163,14 +236,20 @@ Page({
   _loadAdminData() {
     const app = getApp()
     const all = app.getAllBookings ? app.getAllBookings() : []
-    const today = new Date().toISOString().slice(0, 10)
+    const today = localDateString(new Date())
     const pending = all.filter(b => b._status === 'pending_confirm')
     const todayList = all.filter(b => b.visitDate === today)
+    const customerKeys = {}
+    all.forEach((booking, index) => {
+      const phone = String(booking.phone || '').replace(/\D/g, '')
+      const key = phone || booking._openid || booking._creatorOpenId || booking.id || `record_${index}`
+      customerKeys[key] = true
+    })
 
     this.setData({
       pendingCount: pending.length,
       todayCount: todayList.length,
-      totalCount: all.length,
+      totalCount: Object.keys(customerKeys).length,
       todaySchedule: todayList.map(b => ({
         id: b.id,
         name: b.name,
@@ -178,6 +257,19 @@ Page({
         status: STATUS_CN[b._status] || b._status,
         phone: b.phone || ''
       }))
+    })
+  },
+
+  _loadStaffNotifyConfig() {
+    const app = getApp()
+    if (!app.getStaffNotifyConfig) return
+    const seq = (this._staffNotifyConfigSeq || 0) + 1
+    this._staffNotifyConfigSeq = seq
+    app.getStaffNotifyConfig().then(configured => {
+      if (!this._pageVisible || seq !== this._staffNotifyConfigSeq) return
+      this.setData({ staffNotifyConfigured: configured })
+    }).catch(err => {
+      console.warn('[企业微信] 读取预约提醒配置失败:', err.message || err)
     })
   },
 
@@ -208,30 +300,6 @@ Page({
   // 阻止冒泡，避免点弹窗内部误触关闭
   preventClose() {},
 
-  goFeedback(e) {
-    const { id, modes } = e.currentTarget.dataset
-    var available = []
-    try {
-      if (Array.isArray(modes)) {
-        available = modes
-      } else if (typeof modes === 'string') {
-        available = JSON.parse(modes)
-      } else if (modes) {
-        available = [modes]
-      }
-    } catch (err) {
-      console.warn('[问卷] modes 解析失败:', modes, err)
-      available = []
-    }
-    if (!available || available.length === 0) {
-      wx.showToast({ title: '暂无可用问卷', icon: 'none' })
-      return
-    }
-    // 直接跳转第一个可用项，不再弹窗选择
-    const mode = available[0].mode
-    wx.navigateTo({ url: `/pages/feedback/feedback?recordId=${id}&mode=${mode}` })
-  },
-
   goAftercare(e) {
     const { id, modes } = e.currentTarget.dataset
     var available = []
@@ -254,6 +322,42 @@ Page({
     // 直接跳转第一个可用项，不再弹窗选择
     const mode = available[0].mode
     wx.navigateTo({ url: `/pages/aftercare/aftercare?recordId=${id}&mode=${mode}` })
+  },
+
+  goPhotoUpload(e) {
+    const { id, stage } = e.currentTarget.dataset
+    if (!id || (String(stage) !== '30' && String(stage) !== '90')) {
+      wx.showToast({ title: '照片阶段不正确', icon: 'none' })
+      return
+    }
+    wx.navigateTo({ url: `/pages/photo-upload/photo-upload?id=${id}&stage=${stage}` })
+  },
+
+  subscribeBookingReminders(e) {
+    const bookingId = e.currentTarget.dataset.id
+    const booking = (this.data.bookings || []).find(item => item.id === bookingId)
+    const stages = booking && Array.isArray(booking.reminderStages) ? booking.reminderStages : []
+    const templateIds = stages.map(stage => SUBSCRIBE_TEMPLATES[stage]).filter(id => !!id)
+    if (!templateIds.length) {
+      wx.showToast({ title: '暂无待开启的提醒', icon: 'none' })
+      return
+    }
+
+    wx.requestSubscribeMessage({
+      tmplIds: templateIds,
+      success: result => {
+        const acceptedCount = templateIds.filter(id => result[id] === 'accept').length
+        wx.showModal({
+          title: acceptedCount > 0 ? '提醒设置完成' : '未开启提醒',
+          content: `已同意 ${acceptedCount} 项，共 ${templateIds.length} 项。每次授权对应一次通知，如需补充可再次点击。`,
+          showCancel: false
+        })
+      },
+      fail: err => {
+        console.warn('[订阅消息] 用户补充授权失败:', err)
+        wx.showToast({ title: '提醒授权未完成', icon: 'none' })
+      }
+    })
   },
 
   // 重新预约（基于已取消的旧记录）
@@ -302,10 +406,6 @@ Page({
     this._openAdminPage('/pages/admin/store/store')
   },
 
-  goFeedbacksAdmin() {
-    this._openAdminPage('/pages/admin/feedbacks/feedbacks')
-  },
-
   goExport() {
     this._openAdminPage('/pages/admin/export/export')
   },
@@ -345,24 +445,36 @@ Page({
       self._handlePhoneLogin(result.phone)
       const app = getApp()
       if (result.isAdmin) {
-        const needsAdminReload = !app.globalData._cloudReady
         app._setAdminState(result)
-        if (needsAdminReload && app._loadAllBookingsAsAdmin) {
-          app._loadAllBookingsAsAdmin()
-        }
         self.setData({
           isAdmin: true,
-          adminRole: result.role,
-          adminName: result.name || '工作人员'
+          adminRole: app.globalData.adminRole,
+          adminName: result.name || '工作人员',
+          identityLoading: true
         })
-        self._loadAdminData()
-        wx.showToast({ title: '已识别为工作人员', icon: 'success' })
+        const loading = app._loadAllBookingsAsAdmin
+          ? app._loadAllBookingsAsAdmin()
+          : Promise.resolve()
+        loading.then(() => {
+          if (!app.globalData.isAdmin) {
+            self._refreshCurrentView()
+            return
+          }
+          self._loadAdminData()
+          self.setData({ identityLoading: false })
+          wx.showToast({ title: '已识别为工作人员', icon: 'success' })
+        })
       } else {
-        if (!app.globalData._cloudReady && app._loadOwnBookingsOnly) {
-          app._loadOwnBookingsOnly()
-        }
-        self._loadUserData()
-        wx.showToast({ title: '登录成功', icon: 'success' })
+        self.setData({ identityLoading: true })
+        const loading = app._loadOwnBookingsOnly
+          ? app._loadOwnBookingsOnly()
+          : Promise.resolve()
+        loading.then(() => {
+          self._loadUserData()
+          self._updateUserVisitSummary()
+          self.setData({ identityLoading: false })
+          wx.showToast({ title: '登录成功', icon: 'success' })
+        })
       }
     }).catch(function (err) {
       wx.hideLoading()
@@ -470,12 +582,12 @@ Page({
     }
     const app = getApp()
     app.globalData.isAdmin = true
-    app.globalData.adminRole = 'superadmin'
+    app.globalData.adminRole = 'admin'
     app.globalData.adminName = '管理员'
     wx.setStorageSync('_isAdmin', true)
-    wx.setStorageSync('_adminRole', 'superadmin')
+    wx.setStorageSync('_adminRole', 'admin')
     wx.setStorageSync('_adminName', '管理员')
-    this.setData({ isAdmin: true, adminRole: 'superadmin', adminName: '管理员', previewRole: 'admin' })
+    this.setData({ isAdmin: true, adminRole: 'admin', adminName: '管理员', previewRole: 'admin' })
     this._loadAdminData()
     wx.showToast({ title: '已切换为管理员视角', icon: 'none' })
   },
@@ -488,7 +600,7 @@ Page({
     wx.removeStorageSync('_isAdmin')
     wx.removeStorageSync('_adminRole')
     wx.removeStorageSync('_adminName')
-    this.setData({ isAdmin: false, adminRole: '', adminName: '', previewRole: '' })
+    this.setData({ isAdmin: false, adminRole: '', adminName: '', previewRole: '', staffNotifyConfigured: null })
     this._loadUserData()
     wx.showToast({ title: '已切换为用户视角', icon: 'none' })
   }

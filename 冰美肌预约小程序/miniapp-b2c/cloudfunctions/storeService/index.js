@@ -61,7 +61,7 @@ async function getAdmin(openId) {
 
 async function save(openId, input) {
   const admin = await getAdmin(openId)
-  if (!admin || !['staff', 'superadmin'].includes(admin.role)) {
+  if (!admin || !['staff', 'admin', 'superadmin'].includes(admin.role)) {
     return { success: false, error: '仅操作师或管理员可以修改门店信息' }
   }
 

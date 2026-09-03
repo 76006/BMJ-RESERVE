@@ -12,6 +12,8 @@ Page({
     isEditingStaff: false,
     editStaff: {},
     scoreRange: [1, 2, 3, 4, 5],
+    photoGroups: [],
+    staffNotify: null,
     // 二维码
     showQRModal: false,
     qrCodeUrl: '',
@@ -46,7 +48,8 @@ Page({
     const defaults = {
       _clientManager: '', _totalEnergy: '', _shotDistribution: '', _maxLevel: '',
       _immediateSatisfaction: 0, _comfortSatisfaction: 0,
-      _photos: [], _immediatePhotos: [], _day30Photos: [], _day90Photos: [],
+      _photos: [], _beforePhotos: [], _beforeFrontPhotos: [], _beforeSidePhotos: [],
+      _immediatePhotos: [], _day30Photos: [], _day90Photos: [],
       _productFeedback: '',
       _day30FollowUp: '', _day90FollowUp: '',
       _followUpRecords: []
@@ -54,6 +57,21 @@ Page({
     Object.keys(defaults).forEach(k => {
       if (!(k in booking)) booking[k] = defaults[k]
     })
+    ;['_photos', '_beforePhotos', '_beforeFrontPhotos', '_beforeSidePhotos',
+      '_immediatePhotos', '_day30Photos', '_day90Photos'].forEach(key => {
+      if (!Array.isArray(booking[key])) booking[key] = []
+    })
+    // 兼容旧版照片字段，统一迁移到“体验前”五角度数组。
+    if (!booking._beforePhotos.some(photo => !!photo)) {
+      const legacy = Array.isArray(booking._photos) ? booking._photos : []
+      booking._beforePhotos = [
+        booking._beforeFrontPhotos[0] || legacy[0] || null,
+        booking._beforeSidePhotos[0] || legacy[1] || null,
+        legacy[2] || null,
+        legacy[3] || null,
+        legacy[4] || null
+      ]
+    }
     // 旧测试数据中的“体验后”照片自动显示到新的“体验后立即”位置。
     if (booking._immediatePhotos.length === 0 && Array.isArray(booking._afterPhotos)) {
       booking._immediatePhotos = booking._afterPhotos
@@ -68,10 +86,29 @@ Page({
     }))
     this.setData({
       booking,
+      photoGroups: this._buildPhotoGroups(booking),
+      staffNotify: this._buildStaffNotifyView(booking),
       editNote: booking._adminNote || '',
       statusOptions: this._getStatusOptions(booking._status)
     })
-    this.loadFeedback()
+  },
+
+  _buildStaffNotifyView(booking) {
+    const status = booking._staffNotifyStatus || 'unknown'
+    const labels = {
+      sent: '已通知操作师',
+      failed: '发送失败',
+      not_configured: '未配置企业微信',
+      pending: '正在发送',
+      unknown: '历史预约未记录'
+    }
+    return {
+      status,
+      label: labels[status] || labels.unknown,
+      error: booking._staffNotifyError || '',
+      updatedAt: this._fmtTime(booking._staffNotifyUpdatedAt || booking._staffNotifiedAt),
+      canRetry: status !== 'sent'
+    }
   },
 
   _getStatusOptions(status) {
@@ -87,40 +124,6 @@ Page({
       rejected: []
     }
     return options[status] || []
-  },
-
-  loadFeedback() {
-    const feedbacks = wx.getStorageSync('feedbacks') || []
-    const f30 = feedbacks.find(f => f.recordId === this.data.booking.id && f.mode === '30')
-    const f90 = feedbacks.find(f => f.recordId === this.data.booking.id && f.mode === '90')
-    const f24 = feedbacks.find(f => f.recordId === this.data.booking.id && f.mode === '24h')
-    const data = {}
-    if (f30) {
-      data.feedback30 = {
-        ...f30,
-        areaList: f30.areas || [],
-        experienceList: f30.experience || [],
-        submittedAtDisplay: this._fmtTime(f30.submittedAt)
-      }
-    }
-    if (f90) {
-      data.feedback90 = {
-        ...f90,
-        areaList: f90.areas || [],
-        experienceList: f90.experience || [],
-        submittedAtDisplay: this._fmtTime(f90.submittedAt)
-      }
-    }
-    if (f24) {
-      data.feedback24 = {
-        ...f24,
-        areaList: f24.areas || [],
-        experienceList: f24.experience || [],
-        therapistList: f24.therapist || [],
-        submittedAtDisplay: this._fmtTime(f24.submittedAt)
-      }
-    }
-    if (f30 || f90 || f24) this.setData(data)
   },
 
   _runBookingAction(action, successTitle, onSuccess) {
@@ -150,13 +153,17 @@ Page({
     if (!key) return
     const photos = this.data.booking[key] || []
     if (photos[idx]) {
-      const urls = photos.map(p => typeof p === 'string' ? p : p.path)
-      wx.previewImage({ current: urls[idx], urls })
+      const current = typeof photos[idx] === 'string' ? photos[idx] : photos[idx].path
+      const urls = photos
+        .map(p => typeof p === 'string' ? p : ((p && p.path) || ''))
+        .filter(path => !!path)
+      wx.previewImage({ current, urls })
     }
   },
 
   _comparePhotoField(type) {
     const fields = {
+      before: '_beforePhotos',
       immediate: '_immediatePhotos',
       day30: '_day30Photos',
       day90: '_day90Photos'
@@ -164,17 +171,29 @@ Page({
     return fields[type] || ''
   },
 
-  previewFbPhoto(e) {
-    const { type, idx } = e.currentTarget.dataset
-    const fbMap = {
-      feedback24: this.data.feedback24,
-      feedback30: this.data.feedback30,
-      feedback90: this.data.feedback90
-    }
-    const fb = fbMap[type]
-    if (fb && fb.photos) {
-      wx.previewImage({ current: fb.photos[idx], urls: fb.photos })
-    }
+  _buildPhotoGroups(booking) {
+    const angles = ['正脸', '左侧45°', '右侧45°', '左侧90°', '右侧90°']
+    const groups = [
+      { type: 'before', title: '体验前', field: '_beforePhotos' },
+      { type: 'immediate', title: '体验后立即', field: '_immediatePhotos' },
+      { type: 'day30', title: '体验后30天', field: '_day30Photos' },
+      { type: 'day90', title: '体验后90天', field: '_day90Photos' }
+    ]
+    return groups.map(group => {
+      const values = Array.isArray(booking[group.field]) ? booking[group.field] : []
+      return {
+        type: group.type,
+        title: group.title,
+        items: angles.map((angle, index) => {
+          const value = values[index]
+          return {
+            index,
+            angle,
+            path: typeof value === 'string' ? value : ((value && value.path) || '')
+          }
+        })
+      }
+    })
   },
 
   // ===== 状态操作 =====
@@ -219,6 +238,23 @@ Page({
   },
 
   closeCancelModal() { this.setData({ showCancelModal: false, cancelReason: '' }) },
+
+  retryStaffNotify() {
+    const booking = this.data.booking
+    const app = getApp()
+    if (!booking || !app.retryStaffNotification) return
+    this._runBookingAction(
+      () => app.retryStaffNotification(booking.id),
+      '',
+      result => {
+        this._refreshBooking()
+        wx.showToast({
+          title: result.sent ? '通知已发送' : '发送失败，请检查配置',
+          icon: 'none'
+        })
+      }
+    )
+  },
 
   // ===== 内部备注 =====
   startEditNote() { this.setData({ isEditingNote: true }) },
@@ -337,11 +373,12 @@ Page({
     this.setData({ [`editStaff.${key}`]: Number(e.detail.value) + 1 })
   },
 
-  // ===== 三个时间点的体验后照片 =====
+  // ===== 20个固定照片位：4个时间点 × 5个拍摄角度 =====
   chooseComparePhoto(e) {
     const type = e.currentTarget.dataset.type
+    const index = Number(e.currentTarget.dataset.idx)
     const key = this._comparePhotoField(type)
-    if (!key || this._actionPending) return
+    if (!key || !Number.isInteger(index) || index < 0 || index > 4 || this._actionPending) return
     wx.chooseMedia({
       count: 1,
       mediaType: ['image'],
@@ -350,11 +387,14 @@ Page({
       success: (res) => {
         const photo = { path: res.tempFiles[0].tempFilePath, name: `photo_${Date.now()}.jpg` }
         const app = getApp()
+        const photos = Array.isArray(this.data.booking[key]) ? [...this.data.booking[key]] : []
+        while (photos.length < 5) photos.push(null)
         this._runBookingAction(
           () => app.uploadImage(photo.path, `booking/${this.data.booking.id}/${type}`)
-            .then(fileID => app.updateStaffData(this.data.booking.id, {
-              [key]: [{ ...photo, path: fileID, fileID }]
-            })),
+            .then(fileID => {
+              photos[index] = { ...photo, path: fileID, fileID }
+              return app.updateStaffData(this.data.booking.id, { [key]: photos })
+            }),
           '上传成功'
         )
       }
@@ -363,16 +403,20 @@ Page({
 
   deleteComparePhoto(e) {
     const type = e.currentTarget.dataset.type
+    const index = Number(e.currentTarget.dataset.idx)
     const key = this._comparePhotoField(type)
-    if (!key) return
+    if (!key || !Number.isInteger(index) || index < 0 || index > 4) return
     wx.showModal({
       title: '确认删除',
       content: '确定要删除这张照片吗？',
       success: (res) => {
         if (!res.confirm) return
         const app = getApp()
+        const photos = Array.isArray(this.data.booking[key]) ? [...this.data.booking[key]] : []
+        while (photos.length < 5) photos.push(null)
+        photos[index] = null
         this._runBookingAction(
-          () => app.updateStaffData(this.data.booking.id, { [key]: [] }),
+          () => app.updateStaffData(this.data.booking.id, { [key]: photos }),
           '已删除'
         )
       }

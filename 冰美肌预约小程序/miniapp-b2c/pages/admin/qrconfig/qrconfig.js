@@ -17,7 +17,7 @@ Page({
 
   onLoad() {
     const role = (getApp().globalData.adminRole || wx.getStorageSync('_adminRole') || '')
-    if (!['staff', 'superadmin'].includes(role)) {
+    if (!['staff', 'admin', 'superadmin'].includes(role)) {
       wx.showModal({ title: '无权限', content: '仅工作人员可访问。', showCancel: false, success: () => wx.navigateBack() })
       return
     }

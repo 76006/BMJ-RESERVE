@@ -13,10 +13,10 @@ Page({
   },
 
   onLoad() {
-    if (app.globalData.adminRole !== 'superadmin') {
+    if (app.globalData.adminRole !== 'admin') {
       wx.showModal({
         title: '无权限',
-        content: '仅超级管理员可管理人员。',
+        content: '仅管理员可管理人员。',
         showCancel: false,
         success: () => wx.navigateBack()
       })
@@ -24,7 +24,7 @@ Page({
   },
 
   onShow() {
-    if (app.globalData.adminRole === 'superadmin') this.loadData()
+    if (app.globalData.adminRole === 'admin') this.loadData()
   },
 
   callManage(data) {
@@ -42,6 +42,7 @@ Page({
       const operators = []
       ;(result.admins || []).forEach(item => {
         item.key = item.phone || item.openId
+        item.isSelf = !!item.openId && item.openId === app.globalData.openId
         if (item.role === 'staff') operators.push(item)
         else admins.push(item)
       })

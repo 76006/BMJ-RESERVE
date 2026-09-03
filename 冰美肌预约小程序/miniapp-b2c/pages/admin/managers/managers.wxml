@@ -16,17 +16,17 @@
       </view>
       <view class="staff-list">
         <view class="staff-item" wx:for="{{admins}}" wx:key="key">
-          <view class="staff-avatar {{item.role === 'superadmin' ? 'super' : ''}}">
+          <view class="staff-avatar">
             <text>{{item.name ? item.name[0] : '管'}}</text>
           </view>
           <view class="staff-info">
             <view class="staff-name">{{item.name}} <text class="staff-phone">{{item.phone}}</text></view>
             <view class="staff-meta">
-              <view class="role-tag {{item.role}}">{{item.role === 'superadmin' ? '超级管理员' : '管理员'}}</view>
+              <view class="role-tag admin">管理员</view>
             </view>
           </view>
           <view class="staff-action">
-            <view wx:if="{{item.role === 'superadmin'}}" class="tag-self">本人</view>
+            <view wx:if="{{item.isSelf}}" class="tag-self">本人</view>
             <view wx:else class="btn-remove" data-phone="{{item.phone}}" data-openid="{{item.openId}}" data-name="{{item.name}}" bindtap="removePerson">移除</view>
           </view>
         </view>

@@ -1,9 +1,13 @@
 <nav-bar bgColor="transparent"></nav-bar>
+<view class="identity-loading" wx:if="{{identityLoading}}">
+  <view class="identity-loading-spinner"></view>
+  <text class="identity-loading-text">{{isAdmin ? '正在刷新工作台数据…' : '正在识别当前账号…'}}</text>
+</view>
 <!-- ===== 头部（按角色切换Hero图） ===== -->
 <view class="mine-header">
   <image src="/images/mine_hero_scene.jpg" mode="aspectFill" class="mine-hero-bg" wx:if="{{previewRole === 'user' || (!isAdmin && previewRole !== 'staff' && previewRole !== 'admin')}}"></image>
   <image src="/images/mine_hero_staff.jpg" mode="aspectFill" class="mine-hero-bg" wx:elif="{{previewRole === 'staff' || (isAdmin && adminRole === 'staff' && !previewRole)}}"></image>
-  <image src="/images/mine_hero_staff.jpg" mode="aspectFill" class="mine-hero-bg" wx:elif="{{previewRole === 'admin' || (isAdmin && adminRole === 'superadmin' && !previewRole)}}"></image>
+  <image src="/images/mine_hero_staff.jpg" mode="aspectFill" class="mine-hero-bg" wx:elif="{{previewRole === 'admin' || (isAdmin && adminRole === 'admin' && !previewRole)}}"></image>
   <view class="mine-hero-overlay"></view>
   <view class="avatar-area">
     <view class="avatar">👤</view>
@@ -31,7 +35,7 @@
     <view class="role-tab {{previewRole === 'staff' || (!previewRole && adminRole === 'staff') ? 'active' : ''}}" data-role="staff" bindtap="switchPreviewRole">
       <text>💼 操作师</text>
     </view>
-    <view class="role-tab {{previewRole === 'admin' || (!previewRole && adminRole === 'superadmin') ? 'active' : ''}}" data-role="admin" bindtap="switchPreviewRole">
+    <view class="role-tab {{previewRole === 'admin' || (!previewRole && adminRole === 'admin') ? 'active' : ''}}" wx:if="{{adminRole === 'admin'}}" data-role="admin" bindtap="switchPreviewRole">
       <text>⚙️ 管理员</text>
     </view>
   </view>
@@ -73,6 +77,11 @@
     </view>
   </view>
 
+  <view class="staff-notify-warning" wx:if="{{staffNotifyConfigured === false}}">
+    <text class="staff-notify-warning-title">⚠ 企业微信预约提醒尚未配置</text>
+    <text class="staff-notify-warning-text">请在 bookingService 云函数环境变量中配置 WECOM_BOOKING_WEBHOOK，否则新预约不会通知操作师。</text>
+  </view>
+
   <!-- 快捷入口 -->
   <view class="section admin-shortcuts">
     <view class="shortcut-item" bindtap="goAdminList">
@@ -95,17 +104,12 @@
       <text class="shortcut-text">门店信息</text>
       <text class="shortcut-arrow">›</text>
     </view>
-    <view class="shortcut-item" bindtap="goFeedbacksAdmin">
-      <text class="shortcut-icon">📝</text>
-      <text class="shortcut-text">回访问卷管理</text>
-      <text class="shortcut-arrow">›</text>
-    </view>
     <view class="shortcut-item" bindtap="goQrcodeConfig">
       <text class="shortcut-icon">📱</text>
       <text class="shortcut-text">二维码配置</text>
       <text class="shortcut-arrow">›</text>
     </view>
-    <view class="shortcut-item" wx:if="{{adminRole === 'superadmin' && previewRole !== 'staff' && previewRole !== 'user'}}" bindtap="goStaffManage">
+    <view class="shortcut-item" wx:if="{{adminRole === 'admin' && previewRole !== 'staff' && previewRole !== 'user'}}" bindtap="goStaffManage">
       <text class="shortcut-icon">👥</text>
       <text class="shortcut-text">人员管理</text>
       <text class="shortcut-arrow">›</text>
@@ -238,19 +242,34 @@
         <view class="booking-footer" wx:elif="{{item.userStatus === '预约失败'}}">
           <text class="booking-tap-hint dim">{{item._rejectReason ? '原因：' + item._rejectReason : '该预约未通过，请联系门店'}}</text>
         </view>
-        <!-- 已到店/已体验：问卷 + 护理须知（体验后才触发） -->
+        <!-- 已到店/已体验：护理须知和阶段照片 -->
         <view class="booking-footer" wx:elif="{{item._status === 'visited' || item._status === 'in_experience' || item._status === 'completed'}}">
           <block wx:if="{{item.canAftercare}}">
             <view class="booking-action" data-id="{{item.id}}" data-modes="{{item.availableAftercares}}" catchtap="goAftercare">
               <text class="booking-tap-hint">查看护理须知 →</text>
             </view>
           </block>
-          <block wx:if="{{item.canFeedback}}">
-            <view class="booking-action" data-id="{{item.id}}" data-modes="{{item.availableFeedbacks}}" catchtap="goFeedback">
-              <text class="booking-tap-hint">填写回访问卷 →</text>
+          <block wx:if="{{item.canUploadFollowupPhotos}}">
+            <view
+              class="booking-action photo-upload-action"
+              wx:for="{{item.photoUploadStages}}"
+              wx:for-item="stageItem"
+              wx:key="stage"
+              data-id="{{item.id}}"
+              data-stage="{{stageItem.stage}}"
+              catchtap="goPhotoUpload"
+            >
+              <text class="booking-tap-hint">{{stageItem.label}} →</text>
             </view>
           </block>
-          <text class="booking-tap-hint dim" wx:if="{{!item.canAftercare && !item.canFeedback}}">回访时间未到</text>
+          <text class="booking-tap-hint dim" wx:if="{{!item.canAftercare && !item.canUploadFollowupPhotos}}">照片上传时间未到</text>
+        </view>
+        <view class="booking-reminder-action" wx:if="{{item.canSubscribeReminders}}" data-id="{{item.id}}" catchtap="subscribeBookingReminders">
+          <view class="booking-reminder-copy">
+            <text class="booking-reminder-title">🔔 开启或补充消息提醒</text>
+            <text class="booking-reminder-sub">{{item.reminderText}}</text>
+          </view>
+          <text class="booking-reminder-arrow">›</text>
         </view>
       </view>
     </view>

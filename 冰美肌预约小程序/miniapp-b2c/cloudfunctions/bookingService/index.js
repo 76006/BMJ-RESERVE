@@ -7,12 +7,14 @@
  */
 const cloud = require('wx-server-sdk')
 const crypto = require('crypto')
+const https = require('https')
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 const db = cloud.database()
 const _ = db.command
 
 const TIME_SLOTS = new Set(['9:30-11:30', '13:00-15:00', '15:30-17:30'])
 const TERMINAL_STATUSES = new Set(['cancelled', 'rejected', 'no_show'])
+const WECOM_BOOKING_WEBHOOK = process.env.WECOM_BOOKING_WEBHOOK || ''
 
 const ADMIN_FIELDS = new Set([
   '_status', '_confirmedAt', '_confirmedBy', '_rejectReason', '_cancelReason',
@@ -22,6 +24,7 @@ const ADMIN_FIELDS = new Set([
   '_clientManager', '_totalEnergy', '_shotDistribution', '_maxLevel',
   '_immediateSatisfaction', '_comfortSatisfaction', '_productFeedback',
   '_day30FollowUp', '_day90FollowUp', '_photos',
+  '_beforePhotos', '_beforeFrontPhotos', '_beforeSidePhotos',
   '_immediatePhotos', '_day30Photos', '_day90Photos', '_feedback24',
   '_feedback30', '_feedback90', 'updatedAt'
 ])
@@ -125,7 +128,138 @@ async function resolveBookingOwner(openId, phone, admin) {
     .limit(1)
     .get()
   const linked = res.data && res.data[0]
-  return linked && linked.openId ? linked.openId : openId
+  // 操作师代客预约时，如果客户尚未授权过手机号，先保持客户归属为空。
+  // 不能把操作师的 openId 当成客户，否则客户看不到预约、通知也会发错人。
+  return linked && linked.openId ? linked.openId : ''
+}
+
+// 新预约写入成功后通知企业微信内部群。Webhook 只从云函数环境变量读取，绝不写入代码。
+function notifyWecomNewBooking(booking) {
+  if (!WECOM_BOOKING_WEBHOOK) {
+    return Promise.resolve({ sent: false, reason: 'WECOM_BOOKING_WEBHOOK 未配置' })
+  }
+
+  let endpoint
+  try {
+    endpoint = new URL(WECOM_BOOKING_WEBHOOK)
+  } catch (err) {
+    return Promise.resolve({ sent: false, reason: '企业微信机器人地址格式不正确' })
+  }
+
+  const source = booking.trainerName || ({ medical: '医疗渠道', beauty: '生美渠道', direct: '直接访问' }[booking.channel] || '直接访问')
+  const content = [
+    '【冰美肌新预约】',
+    `顾客：${booking.name || '-'}`,
+    `手机：${booking.phone || '-'}`,
+    `时间：${booking.visitDate || '-'} ${booking.visitTime || '-'}`,
+    `需求：${cleanText(booking.needs || '未填写', 100)}`,
+    `来源：${source}`,
+    '',
+    '请操作师及时打开小程序，在“我的 → 待处理”中确认预约。'
+  ].join('\n')
+  const body = JSON.stringify({
+    msgtype: 'text',
+    text: {
+      content,
+      mentioned_list: ['@all']
+    }
+  })
+
+  return new Promise(resolve => {
+    const request = https.request({
+      protocol: endpoint.protocol,
+      hostname: endpoint.hostname,
+      port: endpoint.port || 443,
+      path: endpoint.pathname + endpoint.search,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Content-Length': Buffer.byteLength(body)
+      },
+      timeout: 5000
+    }, response => {
+      let responseBody = ''
+      response.on('data', chunk => { responseBody += chunk })
+      response.on('end', () => {
+        try {
+          const result = JSON.parse(responseBody || '{}')
+          resolve(result.errcode === 0
+            ? { sent: true }
+            : { sent: false, reason: result.errmsg || `企业微信错误 ${result.errcode}` })
+        } catch (err) {
+          resolve({ sent: false, reason: '企业微信返回内容无法解析' })
+        }
+      })
+    })
+    request.on('timeout', () => {
+      request.destroy()
+      resolve({ sent: false, reason: '企业微信通知超时' })
+    })
+    request.on('error', err => resolve({ sent: false, reason: err.message || '企业微信通知失败' }))
+    request.write(body)
+    request.end()
+  })
+}
+
+async function runWecomBookingNotify(booking) {
+  try {
+    return await notifyWecomNewBooking(booking)
+  } catch (err) {
+    return { sent: false, reason: err.message || '企业微信通知失败' }
+  }
+}
+
+function buildStaffNotifyState(booking, notifyResult) {
+  const sent = notifyResult && notifyResult.sent === true
+  const now = new Date().toISOString()
+  return {
+    _staffNotifyStatus: sent ? 'sent' : (WECOM_BOOKING_WEBHOOK ? 'failed' : 'not_configured'),
+    _staffNotifyError: sent ? '' : cleanText((notifyResult && notifyResult.reason) || '企业微信通知失败', 300),
+    _staffNotifiedAt: sent ? now : (booking._staffNotifiedAt || ''),
+    _staffNotifyUpdatedAt: now,
+    _staffNotifyAttempts: Number(booking._staffNotifyAttempts || 0) + 1
+  }
+}
+
+async function persistStaffNotifyState(docId, booking, notifyResult) {
+  const state = buildStaffNotifyState(booking, notifyResult)
+  Object.assign(booking, state)
+  try {
+    await db.collection('bookings').doc(docId).update({ data: state })
+  } catch (err) {
+    // 通知结果写回失败不影响已经创建成功的预约；管理员仍可在详情页再次发送。
+    console.error('[企业微信] 通知状态写回失败:', err)
+  }
+  return state
+}
+
+async function getStaffNotifyConfig(openId) {
+  const admin = await getAdmin(openId)
+  if (!admin) return { success: false, error: '无管理员权限' }
+  return { success: true, configured: !!WECOM_BOOKING_WEBHOOK }
+}
+
+async function retryStaffNotify(openId, event) {
+  const admin = await getAdmin(openId)
+  if (!admin) return { success: false, error: '无管理员权限' }
+  const bookingId = cleanText(event.bookingId, 40)
+  if (!bookingId) return { success: false, error: '缺少预约编号' }
+
+  const res = await db.collection('bookings').where({ id: bookingId }).limit(1).get()
+  const booking = res.data && res.data[0]
+  if (!booking) return { success: false, error: '预约不存在' }
+
+  const notifyResult = await runWecomBookingNotify(booking)
+  const state = await persistStaffNotifyState(booking._id, booking, notifyResult)
+  if (!notifyResult.sent) {
+    console.warn('[企业微信] 预约通知重试失败:', notifyResult.reason)
+  }
+  return {
+    success: true,
+    sent: notifyResult.sent === true,
+    error: notifyResult.sent ? '' : state._staffNotifyError,
+    data: state
+  }
 }
 
 async function createBooking(openId, event) {
@@ -218,6 +352,9 @@ async function createBooking(openId, event) {
     _immediateSatisfaction: 0,
     _comfortSatisfaction: 0,
     _photos: [],
+    _beforePhotos: [],
+    _beforeFrontPhotos: [],
+    _beforeSidePhotos: [],
     _immediatePhotos: [],
     _day30Photos: [],
     _day90Photos: [],
@@ -228,7 +365,14 @@ async function createBooking(openId, event) {
     _followUpRecords: [],
     _feedback24: false,
     _feedback30: false,
-    _feedback90: false
+    _feedback90: false,
+    _reminder30SentAt: '',
+    _reminder90SentAt: '',
+    _staffNotifyStatus: 'pending',
+    _staffNotifyError: '',
+    _staffNotifiedAt: '',
+    _staffNotifyUpdatedAt: '',
+    _staffNotifyAttempts: 0
   }
 
   try {
@@ -265,7 +409,18 @@ async function createBooking(openId, event) {
       return booking
     }, 5)
     const created = txResult && txResult.result ? txResult.result : txResult
-    return { success: true, data: created || booking }
+    const createdBooking = created || booking
+    const notifyResult = await runWecomBookingNotify(createdBooking)
+    const notifyState = await persistStaffNotifyState(bookingDocId, createdBooking, notifyResult)
+    if (!notifyResult.sent) {
+      console.warn('[企业微信] 新预约通知未发送:', notifyResult.reason)
+    }
+    return {
+      success: true,
+      data: createdBooking,
+      staffNotified: notifyResult.sent === true,
+      staffNotifyStatus: notifyState._staffNotifyStatus
+    }
   } catch (err) {
     const message = String((err && (err.errMsg || err.message)) || '')
     if (message.includes('SLOT_OCCUPIED')) {
@@ -288,6 +443,55 @@ function mergeUnique(groups) {
     if (key) map[key] = item
   }))
   return Object.keys(map).map(key => map[key])
+}
+
+async function listMine(openId) {
+  const phone = await getVerifiedPhone(openId)
+  const tasks = [
+    db.collection('bookings').where({ _openid: openId }).limit(100).get(),
+    db.collection('bookings').where({ _creatorOpenId: openId }).limit(100).get()
+  ]
+  if (phone) tasks.push(db.collection('bookings').where({ phone }).limit(100).get())
+
+  const results = await Promise.all(tasks)
+  const bookings = mergeUnique(results.map(item => item.data || []))
+  const adminCache = {}
+  const now = new Date().toISOString()
+
+  // 已验证手机号与代预约手机号一致时，把尚未绑定或误绑定到操作师的旧预约纠正到客户微信。
+  if (phone) {
+    for (const booking of bookings) {
+      if (booking.phone !== phone || booking._openid === openId) continue
+      const currentOwner = booking._openid || booking._creatorOpenId || ''
+      let ownerIsStaff = false
+      if (currentOwner && currentOwner === booking._createdByOpenId) {
+        if (adminCache[currentOwner] === undefined) {
+          adminCache[currentOwner] = !!(await getAdmin(currentOwner))
+        }
+        ownerIsStaff = adminCache[currentOwner]
+      }
+      if (!currentOwner || ownerIsStaff) {
+        await db.collection('bookings').doc(booking._id).update({
+          data: {
+            _openid: openId,
+            _creatorOpenId: openId,
+            _customerBoundAt: now,
+            updatedAt: now
+          }
+        })
+        booking._openid = openId
+        booking._creatorOpenId = openId
+        booking._customerBoundAt = now
+        booking.updatedAt = now
+      }
+    }
+  }
+
+  const mine = bookings.filter(booking => {
+    return booking._openid === openId || booking._creatorOpenId === openId
+  })
+  mine.sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')))
+  return { success: true, data: mine }
 }
 
 async function listToday(openId, visitDate) {
@@ -447,6 +651,117 @@ async function startExperience(openId, event) {
   return { success: true, data: { _status: 'in_experience', updatedAt: now } }
 }
 
+function followupPhotoField(stage) {
+  if (String(stage) === '30') return '_day30Photos'
+  if (String(stage) === '90') return '_day90Photos'
+  return ''
+}
+
+function bookingServiceDate(booking) {
+  const checkedIn = Date.parse(booking.checkInAt || '')
+  if (Number.isFinite(checkedIn)) {
+    return new Date(checkedIn + 8 * 60 * 60 * 1000).toISOString().slice(0, 10)
+  }
+  return cleanText(booking.visitDate, 10)
+}
+
+function daysSinceService(booking) {
+  const serviceDate = bookingServiceDate(booking)
+  const start = Date.parse(serviceDate + 'T00:00:00+08:00')
+  const today = Date.parse(todayInChina() + 'T00:00:00+08:00')
+  if (!Number.isFinite(start) || !Number.isFinite(today)) return -1
+  return Math.floor((today - start) / (24 * 60 * 60 * 1000))
+}
+
+function publicFollowupPhotoBooking(booking, stage) {
+  const field = followupPhotoField(stage)
+  const source = Array.isArray(booking[field]) ? booking[field] : []
+  return {
+    id: booking.id || '',
+    name: booking.name || '',
+    visitDate: booking.visitDate || '',
+    visitTime: booking.visitTime || '',
+    stage: String(stage),
+    photos: Array.from({ length: 5 }, (_, index) => source[index] || null)
+  }
+}
+
+function normalizeFollowupPhotos(input) {
+  if (!Array.isArray(input)) throw businessError('INVALID_PHOTOS', '照片数据格式不正确')
+  return Array.from({ length: 5 }, (_, index) => {
+    const item = input[index]
+    if (!item) return null
+    const path = cleanText(typeof item === 'string' ? item : (item.path || item.fileID), 500)
+    if (!path || !/^(cloud:\/\/|https:\/\/)/.test(path)) {
+      throw businessError('INVALID_PHOTOS', '照片上传结果无效，请重新上传')
+    }
+    return {
+      path,
+      fileID: path.indexOf('cloud://') === 0 ? path : '',
+      name: cleanText(typeof item === 'object' ? item.name : '', 100)
+    }
+  })
+}
+
+async function getFollowupPhotoBooking(openId, event) {
+  const bookingId = cleanText(event.bookingId, 40)
+  const stage = String(event.stage || '')
+  const field = followupPhotoField(stage)
+  if (!bookingId) return { success: false, error: '缺少预约编号' }
+  if (!field) return { success: false, error: '照片阶段不正确' }
+
+  const res = await db.collection('bookings').where({ id: bookingId }).limit(1).get()
+  const booking = res.data && res.data[0]
+  if (!booking) return { success: false, error: '预约不存在' }
+  const access = await getBookingAccess(openId, booking)
+  if (!access.allowed && !access.phone) {
+    return { success: false, requiresPhoneAuth: true, error: '请先在“我的”页面授权预约手机号' }
+  }
+  if (!access.allowed) return { success: false, error: '该预约不属于当前微信账号' }
+  if (!['visited', 'in_experience', 'completed'].includes(booking._status)) {
+    return { success: false, error: '完成到店签到后才能上传体验后照片' }
+  }
+  if (daysSinceService(booking) < Number(stage)) {
+    return { success: false, error: `体验后${stage}天才可上传本阶段照片` }
+  }
+
+  // 操作师代预约的顾客首次用本人手机号进入时，把预约归属绑定到当前微信。
+  if (!access.owner && access.phoneOwner) {
+    await db.collection('bookings').doc(booking._id).update({
+      data: { _openid: openId, updatedAt: new Date().toISOString() }
+    })
+    booking._openid = openId
+  }
+  return { success: true, data: publicFollowupPhotoBooking(booking, stage) }
+}
+
+async function saveFollowupPhotos(openId, event) {
+  const bookingId = cleanText(event.bookingId, 40)
+  const stage = String(event.stage || '')
+  const field = followupPhotoField(stage)
+  if (!bookingId) return { success: false, error: '缺少预约编号' }
+  if (!field) return { success: false, error: '照片阶段不正确' }
+
+  const res = await db.collection('bookings').where({ id: bookingId }).limit(1).get()
+  const booking = res.data && res.data[0]
+  if (!booking) return { success: false, error: '预约不存在' }
+  const access = await getBookingAccess(openId, booking)
+  if (!access.allowed) return { success: false, error: '无权修改该预约的照片' }
+  if (!['visited', 'in_experience', 'completed'].includes(booking._status)) {
+    return { success: false, error: '完成到店签到后才能上传体验后照片' }
+  }
+  if (daysSinceService(booking) < Number(stage)) {
+    return { success: false, error: `体验后${stage}天才可上传本阶段照片` }
+  }
+
+  const photos = normalizeFollowupPhotos(event.photos)
+  const data = { [field]: photos, updatedAt: new Date().toISOString() }
+  if (!access.owner && access.phoneOwner) data._openid = openId
+  await db.collection('bookings').doc(booking._id).update({ data })
+  booking[field] = photos
+  return { success: true, data: publicFollowupPhotoBooking(booking, stage) }
+}
+
 function pickFields(input, allowed) {
   const output = {}
   Object.keys(input || {}).forEach(key => {
@@ -548,12 +863,17 @@ exports.main = async (event) => {
   if (!openId) return { success: false, error: '无法识别当前微信用户' }
   try {
     if (event.action === 'create') return await createBooking(openId, event)
+    if (event.action === 'listMine') return await listMine(openId)
     if (event.action === 'listToday') return await listToday(openId, event.visitDate)
     if (event.action === 'getForCheckin') {
       return await getForCheckin(openId, String(event.bookingId || '').trim())
     }
     if (event.action === 'completeCheckin') return await completeCheckin(openId, event)
     if (event.action === 'startExperience') return await startExperience(openId, event)
+    if (event.action === 'getFollowupPhotoBooking') return await getFollowupPhotoBooking(openId, event)
+    if (event.action === 'saveFollowupPhotos') return await saveFollowupPhotos(openId, event)
+    if (event.action === 'getStaffNotifyConfig') return await getStaffNotifyConfig(openId)
+    if (event.action === 'retryStaffNotify') return await retryStaffNotify(openId, event)
     if (event.action === 'update') return await updateBooking(openId, event)
     return { success: false, error: '不支持的操作' }
   } catch (err) {
@@ -570,6 +890,9 @@ exports.main = async (event) => {
     }
     if (message.includes('ALREADY_CHECKED_IN:')) {
       return { success: false, error: '该预约已经完成签到' }
+    }
+    if (message.includes('INVALID_PHOTOS:')) {
+      return { success: false, error: message.split('INVALID_PHOTOS:').pop() }
     }
     return { success: false, error: err.message || '预约服务失败' }
   }

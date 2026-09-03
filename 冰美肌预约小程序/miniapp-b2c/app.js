@@ -49,6 +49,12 @@ const CHANNEL_MAP = {
   direct:  '直接访问'
 }
 
+// 正式权限只有两级：staff（操作师）与 admin（管理员）。
+// 线上已有的 superadmin 数据按 admin 兼容，避免升级后原管理员失去权限。
+function normalizeAdminRole(role) {
+  return role === 'admin' || role === 'superadmin' ? 'admin' : 'staff'
+}
+
 // 解析小程序码 scene 字符串
 // 微信扫码进入时，整个 scene（如 'checkin=true'、'id=xxx'、'channel=beauty&trainer=xxx'）
 // 会作为整体放在 options.query.scene 中，不会自动拆成多个 query key，需手动解析
@@ -88,6 +94,7 @@ App({
     _: null,              // 云数据库 command
     _useCloud: true,      // 是否使用云数据库（默认开启）
     _cloudReady: false,   // 云数据库是否就绪
+    _identityReady: false, // 当前微信的管理员身份是否已经完成云端校验
     _launchCheckin: false,     // 是否需要跳转签到页
     _checkinBookingId: '',     // 扫描签到码带入的预约ID
     openId: ''              // 用户 openId（云开发身份标识）
@@ -117,14 +124,39 @@ App({
 
     // 必须先确认当前微信身份，再读取任何本地缓存或预约数据。
     // 同一部手机更换微信号时，这一步会清除上一账号遗留的资料与权限。
+    this.globalData._identityReady = false
     this.getOpenId((openid) => {
       if (!openid) {
         this.logoutAdmin()
         this.globalData.bookings = []
         console.warn('[身份隔离] 未取得当前微信身份，本次不读取本地用户数据')
+        this._markIdentityReady()
         return
       }
-      this._checkAdminByOpenId(() => this._initCollections())
+      this._checkAdminByOpenId(() => {
+        this._markIdentityReady()
+        this._initCollections()
+      })
+    })
+  },
+
+  // 页面可在启动阶段等待管理员身份校验完成，避免先渲染成普通用户。
+  whenIdentityReady(callback) {
+    if (typeof callback !== 'function') return
+    if (this.globalData._identityReady) {
+      callback()
+      return
+    }
+    this._identityWaiters = this._identityWaiters || []
+    this._identityWaiters.push(callback)
+  },
+
+  _markIdentityReady() {
+    this.globalData._identityReady = true
+    const waiters = this._identityWaiters || []
+    this._identityWaiters = []
+    waiters.forEach(fn => {
+      try { fn() } catch (err) { console.warn('[身份校验] 页面刷新失败:', err) }
     })
   },
 
@@ -218,81 +250,115 @@ App({
     // 管理员通过云函数加载全部（绕过安全规则）
     var self = this
     if (wx.getStorageSync('_isAdmin')) {
-      this._loadAllBookingsAsAdmin()
-    } else {
-      this._loadOwnBookingsOnly()
+      return this._loadAllBookingsAsAdmin()
     }
+    // 普通用户尚未完成手机号登录时不提前发起预约读取，避免登录过程复用到旧请求。
+    if (!wx.getStorageSync('_phoneVerified')) {
+      this.globalData.bookings = []
+      this.globalData._cloudReady = false
+      return Promise.resolve([])
+    }
+    return this._loadOwnBookingsOnly()
   },
 
   // 管理员：通过云函数加载全部预约（绕过数据库安全规则）
-  _loadAllBookingsAsAdmin() {
+  _loadAllBookingsAsAdmin(callback) {
     var self = this
-    var timer = setTimeout(() => {
-      console.warn('[云开发] 管理员加载超时，降级到本地存储')
-      self._loadBookingsLocal()
-    }, 4500)
-    wx.cloud.callFunction({
-      name: 'getAdminBookings',
-      data: { limit: 200 }
-    }).then(res => {
-      clearTimeout(timer)
-      var result = res.result || {}
-      if (!result.success) {
-        console.warn('[云开发] 管理员身份失效:', result.error || '无权限')
-        self.logoutAdmin()
-        self._loadOwnBookingsOnly()
-        return
+
+    // 启动流程和“我的”页可能同时发起读取，复用同一个请求，避免后返回的旧请求覆盖新数据。
+    if (!this._adminBookingsPromise) {
+      const loadPage = function(offset, all) {
+        return wx.cloud.callFunction({
+          name: 'getAdminBookings',
+          data: { limit: 100, offset },
+          timeout: 20000
+        }).then(res => {
+          const result = res.result || {}
+          if (!result.success) throw new Error(result.error || '无管理员权限')
+          const rows = result.data || []
+          all.push(...rows)
+          if (result.hasMore && rows.length > 0) return loadPage(offset + rows.length, all)
+          return all
+        })
       }
-      var data = result.data || []
-      data.sort(function(a, b) {
-        var ta = a.createdAt || 0
-        var tb = b.createdAt || 0
-        return tb.localeCompare ? tb.localeCompare(ta) : (tb > ta ? -1 : 1)
+
+      this._adminBookingsPromise = loadPage(0, []).then(data => {
+        data.sort(function(a, b) {
+          var ta = a.createdAt || 0
+          var tb = b.createdAt || 0
+          return tb.localeCompare ? tb.localeCompare(ta) : (tb > ta ? -1 : 1)
+        })
+        self.globalData.bookings = data
+        self.globalData._cloudReady = true
+        self._saveLocal()
+        console.log('[云开发] 管理员加载 ' + data.length + ' 条预约记录')
+        return data
+      }).catch(err => {
+        const message = err && err.message ? err.message : String(err || '')
+        console.warn('[云开发] 管理员加载失败，降级到当前账号缓存:', message)
+        if (message.indexOf('无管理员权限') >= 0) {
+          self.logoutAdmin()
+          self.globalData.bookings = []
+          self.globalData._cloudReady = false
+          return self._loadOwnBookingsOnly()
+        }
+        self._loadBookingsLocal()
+        return self.globalData.bookings || []
+      }).then(data => {
+        self._adminBookingsPromise = null
+        return data
       })
-      self.globalData.bookings = data
-      self.globalData._cloudReady = true
-      console.log('[云开发] 管理员加载 ' + data.length + ' 条预约记录')
-    }).catch(err => {
-      clearTimeout(timer)
-      console.warn('[云开发] 管理员加载失败，降级到本地存储:', err && err.message ? err.message : err)
-      self._loadBookingsLocal()
+    }
+
+    return this._adminBookingsPromise.then(data => {
+      if (typeof callback === 'function') callback(data)
+      return data
     })
   },
 
   // 普通用户：只加载自己的预约（数据隔离）
-  _loadOwnBookingsOnly() {
+  _loadOwnBookingsOnly(callback) {
     var self = this
-    this.getOpenId(function(openid) {
-      if (!openid) {
-        console.warn('[云开发] 获取 openId 失败，降级到本地存储')
-        self._loadBookingsLocal()
-        return
-      }
-      var timer = setTimeout(function () {
-        console.warn('[云开发] 查询超时，降级到本地存储')
-        self._loadBookingsLocal()
-      }, 4500)
-      self.globalData.db.collection('bookings')
-        .where({ _openid: openid })
-        .limit(200)
-        .get()
-        .then(res => {
-          clearTimeout(timer)
-          var data = res.data || []
-          data.sort(function(a, b) {
-            var ta = a.createdAt || 0
-            var tb = b.createdAt || 0
-            return tb.localeCompare ? tb.localeCompare(ta) : (tb > ta ? -1 : 1)
-          })
-          self.globalData.bookings = data
-          self.globalData._cloudReady = true
-          console.log('[云开发] 用户加载 ' + data.length + ' 条预约记录（仅本人）')
+    if (!this._ownBookingsPromise) {
+      this._ownBookingsPromise = new Promise((resolve, reject) => {
+        self.getOpenId(openid => {
+          if (!openid) {
+            reject(new Error('无法识别当前微信用户'))
+            return
+          }
+          wx.cloud.callFunction({
+            name: 'bookingService',
+            data: { action: 'listMine' },
+            timeout: 15000
+          }).then(resolve).catch(reject)
         })
-        .catch(err => {
-          clearTimeout(timer)
-          console.warn('[云开发] 读取失败，降级到本地存储:', err && err.message ? err.message : err)
-          self._loadBookingsLocal()
+      }).then(res => {
+        const result = res.result || {}
+        if (!result.success) throw new Error(result.error || '读取预约失败')
+        const data = result.data || []
+        data.sort(function(a, b) {
+          var ta = a.createdAt || 0
+          var tb = b.createdAt || 0
+          return tb.localeCompare ? tb.localeCompare(ta) : (tb > ta ? -1 : 1)
         })
+        self.globalData.bookings = data
+        self.globalData._cloudReady = true
+        self._saveLocal()
+        console.log('[云开发] 用户加载 ' + data.length + ' 条预约记录（仅本人）')
+        return data
+      }).catch(err => {
+        console.warn('[云开发] 用户预约读取失败，降级到当前账号缓存:', err && err.message ? err.message : err)
+        self._loadBookingsLocal()
+        return self.globalData.bookings || []
+      }).then(data => {
+        self._ownBookingsPromise = null
+        return data
+      })
+    }
+
+    return this._ownBookingsPromise.then(data => {
+      if (typeof callback === 'function') callback(data)
+      return data
     })
   },
 
@@ -526,6 +592,35 @@ App({
     }
   },
 
+  // 管理员查看企业微信预约提醒是否已配置。仅返回布尔值，不暴露机器人地址。
+  getStaffNotifyConfig() {
+    return wx.cloud.callFunction({
+      name: 'bookingService',
+      data: { action: 'getStaffNotifyConfig' }
+    }).then(res => {
+      const result = res.result || {}
+      if (!result.success) throw new Error(result.error || '读取通知配置失败')
+      return result.configured === true
+    })
+  },
+
+  // 企业微信通知失败时由管理员手动重试，并同步更新当前预约缓存。
+  retryStaffNotification(bookingId) {
+    const self = this
+    if (!bookingId) return Promise.reject(new Error('缺少预约编号'))
+    return wx.cloud.callFunction({
+      name: 'bookingService',
+      data: { action: 'retryStaffNotify', bookingId }
+    }).then(res => {
+      const result = res.result || {}
+      if (!result.success) throw new Error(result.error || '重新发送失败')
+      const booking = self._find(bookingId)
+      if (booking && result.data) Object.assign(booking, result.data)
+      self._saveLocal()
+      return result
+    })
+  },
+
   // 现场签到并录入设备型号
   checkIn(bookingId, deviceModel) {
     const booking = this._find(bookingId)
@@ -594,7 +689,7 @@ App({
       if (wx.getStorageSync('_isAdmin')) {
         this.globalData.isAdmin = true
         this.globalData.adminName = wx.getStorageSync('_adminName') || '\u7ba1\u7406\u5458'
-        this.globalData.adminRole = wx.getStorageSync('_adminRole') || 'staff'
+        this.globalData.adminRole = normalizeAdminRole(wx.getStorageSync('_adminRole') || 'staff')
       }
       if (done) done()
       return
@@ -623,13 +718,13 @@ App({
     const wasAdmin = this.globalData.isAdmin
     this.globalData.isAdmin = true
     this.globalData.adminName = admin.name || '\u7ba1\u7406\u5458'
-    this.globalData.adminRole = admin.role || 'staff'
+    this.globalData.adminRole = normalizeAdminRole(admin.role)
     this.globalData.adminPhone = admin.phone || ''
     wx.setStorageSync('_isAdmin', true)
     wx.setStorageSync('_adminName', admin.name || '\u7ba1\u7406\u5458')
-    wx.setStorageSync('_adminRole', admin.role || 'staff')
+    wx.setStorageSync('_adminRole', this.globalData.adminRole)
     wx.setStorageSync('_adminPhone', admin.phone || '')
-    console.log('[管理员] 云端身份已确认:', admin.role)
+    console.log('[管理员] 云端身份已确认:', this.globalData.adminRole)
 
     // 新认证的管理员：重新加载全部预约（之前只加载了自己的）
     if (!wasAdmin && this.globalData._cloudReady) {
@@ -793,6 +888,9 @@ App({
     })
     if (data.deviceModel !== undefined) cloudData.deviceModel = data.deviceModel
     if (data._photos !== undefined) cloudData._photos = data._photos
+    if (data._beforePhotos !== undefined) cloudData._beforePhotos = data._beforePhotos
+    if (data._beforeFrontPhotos !== undefined) cloudData._beforeFrontPhotos = data._beforeFrontPhotos
+    if (data._beforeSidePhotos !== undefined) cloudData._beforeSidePhotos = data._beforeSidePhotos
     if (data._immediatePhotos !== undefined) cloudData._immediatePhotos = data._immediatePhotos
     if (data._day30Photos !== undefined) cloudData._day30Photos = data._day30Photos
     if (data._day90Photos !== undefined) cloudData._day90Photos = data._day90Photos
@@ -932,16 +1030,10 @@ App({
       return
     }
 
-    // 超时兜底：3秒后强制回调，避免主流程卡死
-    const timer = setTimeout(() => {
-      console.warn('[云开发] getOpenId 超时，使用空 openId 继续')
-      finish('')
-    }, 3000)
-
     wx.cloud.callFunction({
       name: 'getOpenId',
+      timeout: 15000,
       success: res => {
-        clearTimeout(timer)
         const openid = res.result && res.result.openid
         if (openid) {
           this._activateIdentity(openid)
@@ -950,7 +1042,6 @@ App({
         finish(openid || '')
       },
       fail: (err) => {
-        clearTimeout(timer)
         console.warn('[云开发] getOpenId 调用失败:', err)
         finish('')
       }
@@ -1008,7 +1099,7 @@ App({
       })
       .map(b => {
         const diff = daysDiff(b.visitDate)
-        // 问卷和护理须知触发规则相同（按visit时间计算）
+        // 护理须知按体验日期触发。
         const getAvailable = (diff) => {
           const items = []
           if (diff >= 1) items.push({ mode: '24h', label: '24小时' })
@@ -1016,21 +1107,26 @@ App({
           if (diff >= 90) items.push({ mode: '90', label: '90天' })
           return items
         }
-        // 用户已提交的问卷（不再显示）
-        const allFeedbacks = wx.getStorageSync('feedbacks') || []
-        const submittedModes = new Set(
-          allFeedbacks.filter(f => f.recordId === b.id).map(f => f.mode)
-        )
-        if (b._feedback24) submittedModes.add('24h')
-        if (b._feedback30) submittedModes.add('30')
-        if (b._feedback90) submittedModes.add('90')
         // 护理须知：按时间触发，不受填写状态影响
         const availableAftercares = getAvailable(diff)
         const canAftercare = availableAftercares.length > 0 && (b._status === 'visited' || b._status === 'in_experience' || b._status === 'completed')
-        // 问卷：过滤掉已提交的
-        const rawFeedbacks = getAvailable(diff)
-        const availableFeedbacks = rawFeedbacks.filter(f => !submittedModes.has(f.mode))
-        const canFeedback = availableFeedbacks.length > 0 && (b._status === 'visited' || b._status === 'in_experience' || b._status === 'completed')
+        const photoUploadStages = []
+        if (diff >= 30) photoUploadStages.push({ stage: '30', label: '上传30天照片' })
+        if (diff >= 90) photoUploadStages.push({ stage: '90', label: '上传90天照片' })
+        const canUploadFollowupPhotos = photoUploadStages.length > 0 &&
+          (b._status === 'visited' || b._status === 'in_experience' || b._status === 'completed')
+        const reminderStages = []
+        if (b._status === 'pending_confirm') reminderStages.push('appointment')
+        if (['pending_confirm', 'confirmed', 'visited', 'in_experience', 'completed'].includes(b._status)) {
+          // 定时任务在到期后保留7天重试窗口，超过窗口或已经发送的提醒不再重复授权。
+          if (!b._reminder30SentAt && diff <= 36) reminderStages.push('day30')
+          if (!b._reminder90SentAt && diff <= 96) reminderStages.push('day90')
+        }
+        const reminderNames = reminderStages.map(stage => ({
+          appointment: '预约结果',
+          day30: '30天照片',
+          day90: '90天照片'
+        })[stage])
         return {
           id: b.id,
           name: b.name,
@@ -1042,10 +1138,13 @@ App({
           needs: b.needs,
           createdAt: b.createdAt,
           userStatus: STATUS_MAP[b._status] ? STATUS_MAP[b._status].user : (console.warn('[数据异常] booking', b.id||b._id, '_status 不是6个合法值之一:', b._status), ''),
-          canFeedback: canFeedback,
-          availableFeedbacks: availableFeedbacks,
           canAftercare: canAftercare,
           availableAftercares: availableAftercares,
+          canUploadFollowupPhotos: canUploadFollowupPhotos,
+          photoUploadStages: photoUploadStages,
+          canSubscribeReminders: reminderStages.length > 0,
+          reminderStages: reminderStages,
+          reminderText: reminderNames.join('、') + '提醒',
           _status: b._status,
           _cancelReason: b._cancelReason || ''
         }
