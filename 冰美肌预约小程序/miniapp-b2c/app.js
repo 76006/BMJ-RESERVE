@@ -626,6 +626,10 @@ App({
     const booking = this._find(bookingId)
     if (!booking) return Promise.reject(new Error('预约记录不存在'))
     if (booking._status !== 'confirmed') return Promise.reject(new Error('当前状态不可签到'))
+    const nowDate = new Date()
+    const pad = value => String(value).padStart(2, '0')
+    const today = `${nowDate.getFullYear()}-${pad(nowDate.getMonth() + 1)}-${pad(nowDate.getDate())}`
+    if (booking.visitDate !== today) return Promise.reject(new Error('只能在预约当天到店签到'))
     if (!booking.consentSignTime) return Promise.reject(new Error('请先完成知情同意书签署'))
     const now = new Date().toISOString()
     // 签到时间和“已到店”状态一次提交，避免两个请求先后顺序不确定。
@@ -941,19 +945,6 @@ App({
     })
   },
 
-  // 标记回访问卷已提交
-  markFeedbackDone(bookingId, mode) {
-    const booking = this._find(bookingId)
-    if (!booking) return Promise.reject(new Error('预约记录不存在'))
-    const cloudData = {}
-    if (mode === '24h') cloudData._feedback24 = true
-    if (mode === '30') cloudData._feedback30 = true
-    if (mode === '90') cloudData._feedback90 = true
-    if (Object.keys(cloudData).length === 0) return Promise.reject(new Error('问卷类型不正确'))
-    cloudData.updatedAt = new Date().toISOString()
-    return this._commitBookingUpdate(bookingId, cloudData)
-  },
-
   // 将本机临时图片上传到云存储；已经是云文件或网络图片时直接复用。
   uploadImage(filePath, folder) {
     const path = String(filePath || '').trim()
@@ -1118,9 +1109,9 @@ App({
         const reminderStages = []
         if (b._status === 'pending_confirm') reminderStages.push('appointment')
         if (['pending_confirm', 'confirmed', 'visited', 'in_experience', 'completed'].includes(b._status)) {
-          // 定时任务在到期后保留7天重试窗口，超过窗口或已经发送的提醒不再重复授权。
-          if (!b._reminder30SentAt && diff <= 36) reminderStages.push('day30')
-          if (!b._reminder90SentAt && diff <= 96) reminderStages.push('day90')
+          // 与云端30天重试窗口保持一致，失败期间允许客户再次补充订阅授权。
+          if (!b._reminder30SentAt && diff < 60) reminderStages.push('day30')
+          if (!b._reminder90SentAt && diff < 120) reminderStages.push('day90')
         }
         const reminderNames = reminderStages.map(stage => ({
           appointment: '预约结果',

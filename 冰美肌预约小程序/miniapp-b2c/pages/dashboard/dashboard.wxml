@@ -24,8 +24,8 @@
       <view class="metric-label">到店率</view>
     </view>
     <view class="metric-card">
-      <view class="metric-num c-amber">{{stats.avgSatisfaction}}</view>
-      <view class="metric-label">均满意度</view>
+      <view class="metric-num c-amber">{{stats.completed}}</view>
+      <view class="metric-label">已体验</view>
     </view>
   </view>
 
@@ -62,23 +62,22 @@
     </view>
   </view>
 
-  <!-- 满意度分布 -->
-  <view class="section">
-    <view class="section-title">满意度分布（基于回访）</view>
-    <view class="sat-dist">
-      <view class="sat-col" wx:for="{{[5,4,3,2,1]}}" wx:key="*this">
-        <view class="sat-bar">
-          <view class="sat-fill" style="height: {{stats.satDist[item] || 0}}px"></view>
+  <view class="section" wx:if="{{reminderIssues.length > 0}}">
+    <view class="section-title">提醒发送异常（{{reminderIssues.length}}）</view>
+    <view class="alert-list">
+      <view class="alert-item urgent" wx:for="{{reminderIssues}}" wx:key="id" data-id="{{item.id}}" bindtap="goReminderIssue">
+        <view class="alert-left">
+          <view class="alert-name">{{item.name}} · {{item.stageText}}提醒</view>
+          <text class="alert-info">{{item.error}}</text>
         </view>
-        <view class="sat-star">{{item}}★</view>
-        <view class="sat-cnt">{{stats.satDist[item + 'cnt'] || 0}}</view>
+        <text class="alert-arrow">›</text>
       </view>
     </view>
   </view>
 
-  <!-- 近30天趋势 -->
+  <!-- 预约趋势 -->
   <view class="section">
-    <view class="section-title">近30天预约趋势</view>
+    <view class="section-title">{{trendTitle}}</view>
     <view class="chart-area">
       <view class="chart-bar" wx:for="{{trend}}" wx:key="*this" style="height: {{item.h}}px">
         <view class="chart-val" wx:if="{{item.count > 0}}">{{item.count}}</view>

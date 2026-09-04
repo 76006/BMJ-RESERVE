@@ -54,14 +54,6 @@
       "permission": "所有用户不可读写",
       "reason": "唯一门店配置由 storeService 公开读取；仅 active 的操作师或管理员可通过云函数修改。",
       "indexes": []
-    },
-    "feedbacks": {
-      "permission": "仅创建者可读写",
-      "reason": "顾客提交并读取自己的问卷；管理员全量读取通过 getAdminFeedbacks 云函数完成。",
-      "indexes": [
-        { "name": "idx_recordId", "fields": ["recordId"], "description": "按预约记录ID查询问卷" },
-        { "name": "idx_recordId_mode", "fields": ["recordId", "mode"], "description": "复合索引：记录ID+模式（去重）" }
-      ]
     }
   },
   "_note_no_consents_collection": "知情同意书数据存在 bookings 集合内（consentSignName/consentSignTime/consentPhotoAuth1/consentPhotoAuth2 字段），没有独立的 consents 集合。",

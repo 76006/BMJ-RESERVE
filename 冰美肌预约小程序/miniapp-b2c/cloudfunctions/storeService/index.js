@@ -34,6 +34,27 @@ function publicConfig(doc) {
   }
 }
 
+function normalizeTrainers(input) {
+  if (!Array.isArray(input)) return []
+  if (input.length > 100) throw new Error('操作师配置最多保存100条')
+  const ids = new Set()
+  return input.map(item => {
+    const id = cleanText(item && item.id, 24)
+    const name = cleanText(item && item.name, 40)
+    const channel = item && item.channel === 'medical' ? 'medical' : 'beauty'
+    if (!id || !/^[A-Za-z0-9_-]+$/.test(id)) throw new Error('操作师ID只能包含字母、数字、下划线和短横线')
+    if (!name) throw new Error('操作师姓名不能为空')
+    if (ids.has(id)) throw new Error(`操作师ID重复：${id}`)
+    ids.add(id)
+    return {
+      id,
+      name,
+      channel,
+      sceneParam: `channel=${channel}&trainer=${encodeURIComponent(id)}&name=${encodeURIComponent(name)}`
+    }
+  })
+}
+
 function isMissingDocumentError(err) {
   const message = String((err && (err.errMsg || err.message)) || '').toLowerCase()
   return message.includes('not exist') || message.includes('not found') ||
@@ -100,12 +121,52 @@ async function save(openId, input) {
   return { success: true, data: publicConfig(Object.assign({}, data, { configured: true, updatedAt: now })) }
 }
 
+async function getTrainers(openId) {
+  const admin = await getAdmin(openId)
+  if (!admin || !['staff', 'admin', 'superadmin'].includes(admin.role)) {
+    return { success: false, data: [], error: '仅操作师或管理员可以读取二维码配置' }
+  }
+  try {
+    const res = await db.collection('store_config').doc('current').get()
+    return { success: true, data: normalizeTrainers(res && res.data && res.data.trainers) }
+  } catch (err) {
+    if (isMissingDocumentError(err)) return { success: true, data: [] }
+    throw err
+  }
+}
+
+async function saveTrainers(openId, input) {
+  const admin = await getAdmin(openId)
+  if (!admin || !['staff', 'admin', 'superadmin'].includes(admin.role)) {
+    return { success: false, data: [], error: '仅操作师或管理员可以修改二维码配置' }
+  }
+  const trainers = normalizeTrainers(input)
+  const now = new Date().toISOString()
+  const storeRef = db.collection('store_config').doc('current')
+  const updateData = {
+    trainers,
+    qrConfigUpdatedAt: now,
+    qrConfigUpdatedByOpenId: openId,
+    qrConfigUpdatedByName: admin.name || '管理员'
+  }
+  try {
+    await storeRef.get()
+    await storeRef.update({ data: updateData })
+  } catch (err) {
+    if (!isMissingDocumentError(err)) throw err
+    await storeRef.set({ data: Object.assign({ createdAt: now }, updateData) })
+  }
+  return { success: true, data: trainers }
+}
+
 exports.main = async event => {
   event = event || {}
   const openId = cloud.getWXContext().OPENID
   try {
     if (event.action === 'get') return { success: true, data: await getCurrent() }
     if (event.action === 'save') return await save(openId, event.data || {})
+    if (event.action === 'getTrainers') return await getTrainers(openId)
+    if (event.action === 'saveTrainers') return await saveTrainers(openId, event.data || [])
     return { success: false, error: '不支持的操作' }
   } catch (err) {
     console.error('[storeService]', err)

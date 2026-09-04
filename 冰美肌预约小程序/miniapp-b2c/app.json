@@ -4,7 +4,6 @@
     "pages/mine/mine",
     "pages/photo-upload/photo-upload",
     "pages/consent/consent",
-    "pages/feedback/feedback",
     "pages/admin/list/list",
     "pages/admin/detail/detail",
     "pages/admin/checkin/checkin",
@@ -16,7 +15,6 @@
     "pages/admin/store/store",
     "pages/checkin/guest/guest",
     "pages/admin/managers/managers",
-    "pages/admin/feedbacks/feedbacks",
     "pages/admin/export/export"
   ],
   "window": {

@@ -277,6 +277,7 @@ Page({
     const matches = all.filter(b => {
       if (b.visitDate !== today) return false
       if (b.checkInAt) return false
+      if (b._status !== 'confirmed') return false
       const bp = clean(b.phone)
       return bp === p
     })
@@ -285,7 +286,7 @@ Page({
   },
 
   // 获取今日"可签到"的预约列表（用于 not_found 兜底手动选择）
-  // 仅返回：今天、未签到、状态为已预约/已到店 的预约
+  // 仅返回：今天、未签到、状态为已预约的预约
   // @param {Array} [list] 可选，外部传入的预约列表（如云端按手机号查回的结果）；缺省回退到 globalData.bookings
   _getTodayBookings(today, list) {
     const app = getApp()
@@ -295,8 +296,7 @@ Page({
       .filter(b => {
         if (b.visitDate !== today) return false
         if (b.checkInAt) return false
-        // 仅展示已确认/已到店（签到需要 confirmed 状态；已到店 checkInAt 已过滤）
-        if (b._status !== 'confirmed' && b._status !== 'visited') return false
+        if (b._status !== 'confirmed') return false
         return true
       })
       .map(b => ({
@@ -305,7 +305,7 @@ Page({
         visitDate: b.visitDate,
         visitTime: b.visitTime || '',
         phone: clean(b.phone) || '',
-        statusLabel: b._status === 'visited' ? '已到店' : '已预约'
+        statusLabel: '已预约'
       }))
   },
 
@@ -332,7 +332,7 @@ Page({
       this.setData({ todayBookings: remain })
       return
     }
-    if (full._status !== 'confirmed' && full._status !== 'visited') {
+    if (full._status !== 'confirmed') {
       wx.showToast({ title: '该预约暂不可签到', icon: 'none' })
       return
     }

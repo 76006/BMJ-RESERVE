@@ -1,5 +1,13 @@
 const ANGLES = ['正脸', '左侧45°', '右侧45°', '左侧90°', '右侧90°']
 
+function deleteCloudFile(fileID) {
+  const value = String(fileID || '')
+  if (!value.startsWith('cloud://')) return
+  wx.cloud.deleteFile({ fileList: [value] }).catch(err => {
+    console.warn('[照片清理] 云文件删除失败:', err)
+  })
+}
+
 Page({
   data: {
     loading: true,
@@ -85,12 +93,15 @@ Page({
 
   _uploadAndSave(index, tempFilePath) {
     const app = getApp()
+    let uploadedFileID = ''
+    let saveCompleted = false
     this.setData({ busy: true, uploadingIndex: index })
     wx.showLoading({ title: '上传中', mask: true })
     app.uploadImage(
       tempFilePath,
       `booking/${this.data.bookingId}/day${this.data.stage}/customer`
     ).then(fileID => {
+      uploadedFileID = fileID
       const photos = this.data.photos.map(item => item.path || null)
       photos[index] = {
         path: fileID,
@@ -99,10 +110,12 @@ Page({
       }
       return this._savePhotos(photos)
     }).then(data => {
+      saveCompleted = true
       wx.hideLoading()
       this._applyBooking(data)
       wx.showToast({ title: '照片已保存', icon: 'success' })
     }).catch(err => {
+      if (!saveCompleted && uploadedFileID) deleteCloudFile(uploadedFileID)
       wx.hideLoading()
       wx.showToast({ title: err.message || '上传失败，请重试', icon: 'none' })
     }).finally(() => this.setData({ busy: false, uploadingIndex: -1 }))
@@ -128,9 +141,6 @@ Page({
           wx.hideLoading()
           this._applyBooking(data)
           wx.showToast({ title: '已删除', icon: 'success' })
-          if (oldPath.indexOf('cloud://') === 0) {
-            wx.cloud.deleteFile({ fileList: [oldPath] }).catch(() => {})
-          }
         }).catch(err => {
           wx.hideLoading()
           wx.showToast({ title: err.message || '删除失败，请重试', icon: 'none' })

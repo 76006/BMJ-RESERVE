@@ -15,7 +15,12 @@
       <text class="p">1. 添加操作师信息，系统生成专属参数</text>
       <text class="p">2. 复制参数 → 在微信公众平台生成带参数的小程序码</text>
       <text class="p">3. 用户扫码进入小程序后，预约记录自动关联该操作师</text>
+      <text class="p">4. 操作师列表会自动同步到所有工作人员设备</text>
     </view>
+  </view>
+
+  <view class="empty-trainer" wx:if="{{trainersLoading}}">
+    <text>正在同步云端配置...</text>
   </view>
 
   <!-- 操作师列表 -->
@@ -40,7 +45,7 @@
 
   <!-- 添加按钮 -->
   <view class="add-btn-wrap">
-    <button class="add-trainer-btn" bindtap="toggleAddForm">
+    <button class="add-trainer-btn" bindtap="toggleAddForm" disabled="{{trainersLoading || trainersSaving}}">
       {{showAddForm ? '收起' : '+ 添加操作师'}}
     </button>
   </view>
@@ -61,7 +66,7 @@
         <view class="form-picker">{{channelIdx === 0 ? '生美渠道' : '医疗渠道'}}</view>
       </picker>
     </view>
-    <button class="submit-btn" bindtap="addTrainer">确认添加</button>
+    <button class="submit-btn" bindtap="addTrainer" disabled="{{trainersSaving}}">确认添加并同步</button>
   </view>
 
   <!-- ===== 分隔线 ===== -->

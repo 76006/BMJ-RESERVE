@@ -53,14 +53,6 @@
 .bar-fill { height: 100%; border-radius: 10rpx; transition: width .5s; }
 .bar-num { width: 48rpx; font-size: 24rpx; color: var(--text-secondary); font-weight: 500; text-align: right; }
 
-/* 满意度分布 */
-.sat-dist { display: flex; justify-content: center; gap: 40rpx; align-items: flex-end; height: 160rpx; }
-.sat-col { display: flex; flex-direction: column; align-items: center; gap: 8rpx; }
-.sat-bar { width: 48rpx; height: 120rpx; background: var(--bg); border-radius: 6rpx; display: flex; align-items: flex-end; overflow: hidden; }
-.sat-fill { width: 100%; background: #F59E0B; border-radius: 6rpx 6rpx 0 0; transition: height .5s; }
-.sat-star { font-size: 24rpx; color: var(--amber); }
-.sat-cnt { font-size: 24rpx; color: var(--mid-gray); }
-
 /* 趋势 */
 .chart-area { display: flex; gap: 4rpx; align-items: flex-end; height: 160rpx; padding-bottom: 4rpx; }
 .chart-bar {

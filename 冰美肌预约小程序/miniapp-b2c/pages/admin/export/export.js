@@ -5,7 +5,21 @@ Page({
   },
 
   onShow() {
+    const app = getApp()
+    if (!app.globalData.isAdmin) {
+      wx.showToast({ title: '仅管理员可查看', icon: 'none' })
+      wx.navigateBack()
+      return
+    }
     this.loadData()
+    const refreshSeq = (this._refreshSeq || 0) + 1
+    this._refreshSeq = refreshSeq
+    if (app._loadAllBookingsAsAdmin) {
+      app._loadAllBookingsAsAdmin().then(() => {
+        if (refreshSeq !== this._refreshSeq || !app.globalData.isAdmin) return
+        this.loadData()
+      })
+    }
   },
 
   loadData() {

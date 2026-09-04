@@ -1,3 +1,10 @@
+function deleteCloudFile(fileID) {
+  if (!fileID) return
+  wx.cloud.deleteFile({ fileList: [fileID] }).catch(err => {
+    console.warn('[照片清理] 云文件删除失败:', err)
+  })
+}
+
 Page({
   data: {
     booking: null,
@@ -14,6 +21,7 @@ Page({
     scoreRange: [1, 2, 3, 4, 5],
     photoGroups: [],
     staffNotify: null,
+    followupReminderIssues: [],
     // 二维码
     showQRModal: false,
     qrCodeUrl: '',
@@ -32,8 +40,18 @@ Page({
   },
 
   onShow() {
-    // 从checkin/consent返回后刷新数据
-    if (this._bookingId) this._refreshBooking()
+    if (!this._bookingId) return
+    const app = getApp()
+    // 从签到/同意书返回时先显示本地更新，再同步其他设备产生的云端变化。
+    this._refreshBooking()
+    const refreshSeq = (this._refreshSeq || 0) + 1
+    this._refreshSeq = refreshSeq
+    if (app._loadAllBookingsAsAdmin) {
+      app._loadAllBookingsAsAdmin().then(() => {
+        if (refreshSeq !== this._refreshSeq || !app.globalData.isAdmin) return
+        this._refreshBooking()
+      })
+    }
   },
 
   _refreshBooking() {
@@ -88,6 +106,7 @@ Page({
       booking,
       photoGroups: this._buildPhotoGroups(booking),
       staffNotify: this._buildStaffNotifyView(booking),
+      followupReminderIssues: this._buildFollowupReminderIssues(booking),
       editNote: booking._adminNote || '',
       statusOptions: this._getStatusOptions(booking._status)
     })
@@ -109,6 +128,17 @@ Page({
       updatedAt: this._fmtTime(booking._staffNotifyUpdatedAt || booking._staffNotifiedAt),
       canRetry: status !== 'sent'
     }
+  },
+
+  _buildFollowupReminderIssues(booking) {
+    const issues = []
+    if (!booking._reminder30SentAt && booking._reminder30LastError) {
+      issues.push({ stage: '30天', error: booking._reminder30LastError })
+    }
+    if (!booking._reminder90SentAt && booking._reminder90LastError) {
+      issues.push({ stage: '90天', error: booking._reminder90LastError })
+    }
+    return issues
   },
 
   _getStatusOptions(status) {
@@ -389,11 +419,22 @@ Page({
         const app = getApp()
         const photos = Array.isArray(this.data.booking[key]) ? [...this.data.booking[key]] : []
         while (photos.length < 5) photos.push(null)
+        let uploadedFileID = ''
+        let saveCompleted = false
         this._runBookingAction(
           () => app.uploadImage(photo.path, `booking/${this.data.booking.id}/${type}`)
             .then(fileID => {
+              uploadedFileID = fileID
               photos[index] = { ...photo, path: fileID, fileID }
               return app.updateStaffData(this.data.booking.id, { [key]: photos })
+            })
+            .then(result => {
+              saveCompleted = true
+              return result
+            })
+            .catch(err => {
+              if (!saveCompleted && uploadedFileID) deleteCloudFile(uploadedFileID)
+              throw err
             }),
           '上传成功'
         )
@@ -542,7 +583,16 @@ Page({
 
   // 前往现场签到
   goCheckIn() {
-    const id = this.data.booking.id
+    const booking = this.data.booking
+    if (!booking) return
+    const nowDate = new Date()
+    const pad = value => String(value).padStart(2, '0')
+    const today = `${nowDate.getFullYear()}-${pad(nowDate.getMonth() + 1)}-${pad(nowDate.getDate())}`
+    if (booking.visitDate !== today) {
+      wx.showToast({ title: '只能在预约当天到店签到', icon: 'none' })
+      return
+    }
+    const id = booking.id
     wx.navigateTo({ url: `/pages/admin/checkin/checkin?id=${id}` })
   },
 

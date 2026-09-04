@@ -1,9 +1,0 @@
-{
-  "name": "getAdminFeedbacks",
-  "version": "1.0.0",
-  "description": "管理员读取回访问卷",
-  "main": "index.js",
-  "dependencies": {
-    "wx-server-sdk": "~2.6.3"
-  }
-}

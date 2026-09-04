@@ -82,6 +82,15 @@
     <view class="staff-notify-retry" wx:if="{{staffNotify.canRetry}}" bindtap="retryStaffNotify">重新发送</view>
   </view>
 
+  <view class="followup-reminder-bar" wx:if="{{followupReminderIssues.length > 0}}">
+    <text class="followup-reminder-title">照片提醒发送异常</text>
+    <view class="followup-reminder-item" wx:for="{{followupReminderIssues}}" wx:key="stage">
+      <text class="followup-reminder-stage">{{item.stage}}提醒</text>
+      <text class="followup-reminder-error">{{item.error}}</text>
+    </view>
+    <text class="followup-reminder-tip">请让客户在“我的预约”中重新开启提醒，系统会在重试窗口内再次发送。</text>
+  </view>
+
 </view>
 
 <!-- ===== 用户填写（灰色字段） ===== -->
@@ -259,120 +268,6 @@
       </view>
     </view>
   </block>
-</view>
-
-<!-- ===== 回访反馈 ===== -->
-<!-- 仅已体验状态显示 -->
-<view class="section" wx:if="{{false}}">
-  <view class="section-title">回访反馈</view>
-
-  <view class="feedback-block" wx:if="{{feedback24}}">
-    <view class="fb-header">
-      <view class="fb-title">24小时回访</view>
-      <view class="fb-date">{{feedback24.submittedAtDisplay}}</view>
-    </view>
-    <view class="fb-scores">
-      <view class="fb-score-item" wx:for="{{feedback24.areaList}}" wx:for-item="area" wx:key="key" wx:if="{{area.score > 0}}">
-        <text class="fb-area">{{area.label}}</text>
-        <view class="fb-stars">
-          <text wx:for="{{[1,2,3,4,5]}}" wx:key="*this" class="fb-star {{index < area.score ? 'on' : ''}}">★</text>
-        </view>
-      </view>
-    </view>
-    <view class="fb-therapist" wx:if="{{feedback24.therapistList}}">
-      <view class="fb-therapist-title">操作师评价</view>
-      <view class="fb-score-item" wx:for="{{feedback24.therapistList}}" wx:for-item="t" wx:key="key" wx:if="{{t.score > 0}}">
-        <text class="fb-area">{{t.label}}</text>
-        <view class="fb-stars">
-          <text wx:for="{{[1,2,3,4,5]}}" wx:key="*this" class="fb-star {{index < t.score ? 'on' : ''}}">★</text>
-        </view>
-      </view>
-    </view>
-    <view class="fb-experience" wx:if="{{feedback24.experienceList}}">
-      <view class="fb-therapist-title">体验满意度</view>
-      <view class="fb-score-item" wx:for="{{feedback24.experienceList}}" wx:for-item="exp" wx:key="key" wx:if="{{exp.score > 0}}">
-        <text class="fb-area">{{exp.label}}</text>
-        <view class="fb-stars">
-          <text wx:for="{{[1,2,3,4,5]}}" wx:key="*this" class="fb-star {{index < exp.score ? 'on' : ''}}">★</text>
-        </view>
-      </view>
-    </view>
-    <view class="fb-remark" wx:if="{{feedback24.remark}}">
-      <text class="fb-label">客户反馈</text>
-      <text class="fb-text">{{feedback24.remark}}</text>
-    </view>
-    <view class="fb-photos" wx:if="{{feedback24.photos.length > 0}}">
-      <image wx:for="{{feedback24.photos}}" wx:key="*this" src="{{item}}" mode="aspectFill" class="fb-photo" data-type="feedback24" data-idx="{{index}}" bindtap="previewFbPhoto"/>
-    </view>
-  </view>
-
-  <view class="feedback-block" wx:if="{{feedback30}}">
-    <view class="fb-header">
-      <view class="fb-title">30天回访</view>
-      <view class="fb-date">{{feedback30.submittedAtDisplay}}</view>
-    </view>
-    <view class="fb-scores">
-      <view class="fb-score-item" wx:for="{{feedback30.areaList}}" wx:for-item="area" wx:key="key" wx:if="{{area.score > 0}}">
-        <text class="fb-area">{{area.label}}</text>
-        <view class="fb-stars">
-          <text wx:for="{{[1,2,3,4,5]}}" wx:key="*this" class="fb-star {{index < area.score ? 'on' : ''}}">★</text>
-        </view>
-      </view>
-    </view>
-    <view class="fb-experience" wx:if="{{feedback30.experienceList}}">
-      <view class="fb-therapist-title">体验满意度</view>
-      <view class="fb-score-item" wx:for="{{feedback30.experienceList}}" wx:for-item="exp" wx:key="key" wx:if="{{exp.score > 0}}">
-        <text class="fb-area">{{exp.label}}</text>
-        <view class="fb-stars">
-          <text wx:for="{{[1,2,3,4,5]}}" wx:key="*this" class="fb-star {{index < exp.score ? 'on' : ''}}">★</text>
-        </view>
-      </view>
-    </view>
-    <view class="fb-remark" wx:if="{{feedback30.remark}}">
-      <text class="fb-label">客户反馈</text>
-      <text class="fb-text">{{feedback30.remark}}</text>
-    </view>
-    <view class="fb-photos" wx:if="{{feedback30.photos.length > 0}}">
-      <image wx:for="{{feedback30.photos}}" wx:key="*this" src="{{item}}" mode="aspectFill" class="fb-photo" data-type="feedback30" data-idx="{{index}}" bindtap="previewFbPhoto"/>
-    </view>
-  </view>
-
-  <view class="feedback-block" wx:if="{{feedback90}}" style="margin-top:12rpx;">
-    <view class="fb-header">
-      <view class="fb-title">90天回访</view>
-      <view class="fb-date">{{feedback90.submittedAtDisplay}}</view>
-    </view>
-    <view class="fb-scores">
-      <view class="fb-score-item" wx:for="{{feedback90.areaList}}" wx:for-item="area" wx:key="key" wx:if="{{area.score > 0}}">
-        <text class="fb-area">{{area.label}}</text>
-        <view class="fb-stars">
-          <text wx:for="{{[1,2,3,4,5]}}" wx:key="*this" class="fb-star {{index < area.score ? 'on' : ''}}">★</text>
-        </view>
-      </view>
-    </view>
-    <view class="fb-experience" wx:if="{{feedback90.experienceList}}">
-      <view class="fb-therapist-title">体验满意度</view>
-      <view class="fb-score-item" wx:for="{{feedback90.experienceList}}" wx:for-item="exp" wx:key="key" wx:if="{{exp.score > 0}}">
-        <text class="fb-area">{{exp.label}}</text>
-        <view class="fb-stars">
-          <text wx:for="{{[1,2,3,4,5]}}" wx:key="*this" class="fb-star {{index < exp.score ? 'on' : ''}}">★</text>
-        </view>
-      </view>
-    </view>
-    <!-- 二次体验意愿 -->
-    <view class="fb-retry" wx:if="{{feedback90.retry}}">
-      <text class="fb-label">二次体验意愿</text>
-      <view class="fb-retry-tag {{feedback90.retry === 'yes' ? 'yes' : 'no'}}">{{feedback90.retry === 'yes' ? '是' : '否'}}</view>
-      <text class="fb-text" wx:if="{{feedback90.retryReason}}" style="margin-top:8rpx;">{{feedback90.retryReason}}</text>
-    </view>
-    <view class="fb-remark" wx:if="{{feedback90.remark}}">
-      <text class="fb-label">客户反馈</text>
-      <text class="fb-text">{{feedback90.remark}}</text>
-    </view>
-    <view class="fb-photos" wx:if="{{feedback90.photos.length > 0}}">
-      <image wx:for="{{feedback90.photos}}" wx:key="*this" src="{{item}}" mode="aspectFill" class="fb-photo" data-type="feedback90" data-idx="{{index}}" bindtap="previewFbPhoto"/>
-    </view>
-  </view>
 </view>
 
 <!-- ===== 内部备注 ===== -->

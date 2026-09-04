@@ -62,7 +62,7 @@ Page({
     const history = all
       .filter(b => {
         const bp = (b.phone || '').replace(/\*/g, '').trim()
-        return bp === phone || (bp.length >= 4 && phone.length >= 4 && bp.slice(-4) === phone.slice(-4))
+        return !!phone && bp === phone
       })
       .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
 
@@ -95,7 +95,7 @@ Page({
     const history = all
       .filter(b => {
         const bp = (b.phone || '').replace(/\*/g, '').trim()
-        return bp === phone || (bp.length >= 4 && phone.length >= 4 && bp.slice(-4) === phone.slice(-4))
+        return !!phone && bp === phone
       })
       .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
 

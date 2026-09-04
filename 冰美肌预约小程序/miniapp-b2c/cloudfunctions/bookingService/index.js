@@ -15,6 +15,10 @@ const _ = db.command
 const TIME_SLOTS = new Set(['9:30-11:30', '13:00-15:00', '15:30-17:30'])
 const TERMINAL_STATUSES = new Set(['cancelled', 'rejected', 'no_show'])
 const WECOM_BOOKING_WEBHOOK = process.env.WECOM_BOOKING_WEBHOOK || ''
+const PHOTO_FIELDS = [
+  '_photos', '_beforePhotos', '_beforeFrontPhotos', '_beforeSidePhotos',
+  '_immediatePhotos', '_day30Photos', '_day90Photos'
+]
 
 const ADMIN_FIELDS = new Set([
   '_status', '_confirmedAt', '_confirmedBy', '_rejectReason', '_cancelReason',
@@ -25,14 +29,13 @@ const ADMIN_FIELDS = new Set([
   '_immediateSatisfaction', '_comfortSatisfaction', '_productFeedback',
   '_day30FollowUp', '_day90FollowUp', '_photos',
   '_beforePhotos', '_beforeFrontPhotos', '_beforeSidePhotos',
-  '_immediatePhotos', '_day30Photos', '_day90Photos', '_feedback24',
-  '_feedback30', '_feedback90', 'updatedAt'
+  '_immediatePhotos', '_day30Photos', '_day90Photos', 'updatedAt'
 ])
 
 const USER_FIELDS = new Set([
   '_status', '_cancelReason',
   'name', 'gender', 'age', 'idCard', 'phone',
-  '_feedback24', '_feedback30', '_feedback90', 'updatedAt'
+  'updatedAt'
 ])
 
 async function getAdmin(openId) {
@@ -55,6 +58,32 @@ async function getVerifiedPhone(openId) {
 
 function cleanText(value, maxLength) {
   return String(value == null ? '' : value).trim().slice(0, maxLength)
+}
+
+function collectCloudFileIDs(booking) {
+  const ids = new Set()
+  PHOTO_FIELDS.forEach(field => {
+    const photos = Array.isArray(booking && booking[field]) ? booking[field] : []
+    photos.forEach(photo => {
+      const value = typeof photo === 'string' ? photo : (photo && (photo.fileID || photo.path))
+      if (String(value || '').startsWith('cloud://')) ids.add(String(value))
+    })
+  })
+  return ids
+}
+
+async function cleanupRemovedPhotoFiles(before, updates) {
+  if (!PHOTO_FIELDS.some(field => Object.prototype.hasOwnProperty.call(updates || {}, field))) return
+  const beforeIDs = collectCloudFileIDs(before)
+  const afterIDs = collectCloudFileIDs(Object.assign({}, before, updates))
+  const removed = [...beforeIDs].filter(fileID => !afterIDs.has(fileID))
+  if (!removed.length) return
+  try {
+    await cloud.deleteFile({ fileList: removed })
+  } catch (err) {
+    // 数据引用已经正确更新，文件清理失败不能回滚业务操作；保留日志供后台排查。
+    console.warn('[照片清理] 云文件删除失败:', err)
+  }
 }
 
 function todayInChina() {
@@ -363,9 +392,6 @@ async function createBooking(openId, event) {
     _day90FollowUp: '',
     _adminNote: '',
     _followUpRecords: [],
-    _feedback24: false,
-    _feedback30: false,
-    _feedback90: false,
     _reminder30SentAt: '',
     _reminder90SentAt: '',
     _staffNotifyStatus: 'pending',
@@ -445,16 +471,31 @@ function mergeUnique(groups) {
   return Object.keys(map).map(key => map[key])
 }
 
+async function loadAllBookingsByCondition(condition) {
+  const output = []
+  for (let offset = 0; ; offset += 100) {
+    const res = await db.collection('bookings')
+      .where(condition)
+      .skip(offset)
+      .limit(100)
+      .get()
+    const rows = res.data || []
+    output.push(...rows)
+    if (rows.length < 100) break
+  }
+  return output
+}
+
 async function listMine(openId) {
   const phone = await getVerifiedPhone(openId)
   const tasks = [
-    db.collection('bookings').where({ _openid: openId }).limit(100).get(),
-    db.collection('bookings').where({ _creatorOpenId: openId }).limit(100).get()
+    loadAllBookingsByCondition({ _openid: openId }),
+    loadAllBookingsByCondition({ _creatorOpenId: openId })
   ]
-  if (phone) tasks.push(db.collection('bookings').where({ phone }).limit(100).get())
+  if (phone) tasks.push(loadAllBookingsByCondition({ phone }))
 
   const results = await Promise.all(tasks)
-  const bookings = mergeUnique(results.map(item => item.data || []))
+  const bookings = mergeUnique(results)
   const adminCache = {}
   const now = new Date().toISOString()
 
@@ -510,7 +551,7 @@ async function listToday(openId, visitDate) {
   const results = await Promise.all(tasks)
   const data = mergeUnique(results.map(item => item.data)).filter(item => {
     if (item.checkInAt) return false
-    return item._status === 'confirmed' || item._status === 'visited'
+    return item._status === 'confirmed'
   })
   return { success: true, data }
 }
@@ -758,6 +799,7 @@ async function saveFollowupPhotos(openId, event) {
   const data = { [field]: photos, updatedAt: new Date().toISOString() }
   if (!access.owner && access.phoneOwner) data._openid = openId
   await db.collection('bookings').doc(booking._id).update({ data })
+  await cleanupRemovedPhotoFiles(booking, data)
   booking[field] = photos
   return { success: true, data: publicFollowupPhotoBooking(booking, stage) }
 }
@@ -830,6 +872,13 @@ async function updateBooking(openId, event) {
       const freshRes = await bookingRef.get()
       const freshBooking = freshRes && freshRes.data
       if (!freshBooking) throw businessError('BOOKING_NOT_FOUND', '预约不存在')
+      if (
+        freshBooking._status === 'confirmed' &&
+        (data._status === 'visited' || data._status === 'in_experience') &&
+        freshBooking.visitDate !== todayInChina()
+      ) {
+        throw businessError('CHECKIN_NOT_TODAY', '只能在预约当天到店签到')
+      }
       if (!validStatusChange(freshBooking, data._status, data)) {
         throw businessError(
           'INVALID_STATUS',
@@ -854,6 +903,7 @@ async function updateBooking(openId, event) {
   } else {
     await db.collection('bookings').doc(booking._id).update({ data })
   }
+  await cleanupRemovedPhotoFiles(booking, data)
   return { success: true }
 }
 

@@ -9,6 +9,8 @@ Page({
     channelLabels: ['生美渠道', '医疗渠道'],
     channelIdx: 0,
     showAddForm: false,
+    trainersLoading: false,
+    trainersSaving: false,
     // 门店签到码
     checkinCodeReady: false,
     checkinCodeUrl: '',
@@ -27,7 +29,40 @@ Page({
 
   loadTrainers() {
     const list = wx.getStorageSync('trainers') || []
-    this.setData({ trainers: list })
+    this.setData({ trainers: list, trainersLoading: true })
+    wx.cloud.callFunction({
+      name: 'storeService',
+      data: { action: 'getTrainers' }
+    }).then(res => {
+      const result = res.result || {}
+      if (!result.success) throw new Error(result.error || '读取配置失败')
+      const trainers = Array.isArray(result.data) ? result.data : []
+      wx.setStorageSync('trainers', trainers)
+      this.setData({ trainers })
+    }).catch(err => {
+      console.warn('[二维码配置] 云端读取失败，暂用本机缓存:', err)
+      wx.showToast({ title: '云端配置读取失败，当前显示本机缓存', icon: 'none' })
+    }).finally(() => this.setData({ trainersLoading: false }))
+  },
+
+  _saveTrainers(list) {
+    if (this.data.trainersSaving) return Promise.reject(new Error('配置正在保存，请稍候'))
+    this.setData({ trainersSaving: true })
+    wx.showLoading({ title: '正在同步', mask: true })
+    return wx.cloud.callFunction({
+      name: 'storeService',
+      data: { action: 'saveTrainers', data: list }
+    }).then(res => {
+      const result = res.result || {}
+      if (!result.success) throw new Error(result.error || '同步失败')
+      const trainers = Array.isArray(result.data) ? result.data : []
+      wx.setStorageSync('trainers', trainers)
+      this.setData({ trainers })
+      return trainers
+    }).finally(() => {
+      wx.hideLoading()
+      this.setData({ trainersSaving: false })
+    })
   },
 
   // ===== 操作师管理 =====
@@ -45,25 +80,32 @@ Page({
 
   addTrainer() {
     const { newTrainerId, newTrainerName, newChannel } = this.data
-    if (!newTrainerId.trim() || !newTrainerName.trim()) {
+    const id = newTrainerId.trim()
+    const name = newTrainerName.trim()
+    if (!id || !name) {
       wx.showToast({ title: '请填写ID和姓名', icon: 'none' })
       return
     }
-    const list = wx.getStorageSync('trainers') || []
+    if (!/^[A-Za-z0-9_-]+$/.test(id)) {
+      wx.showToast({ title: 'ID只能包含字母、数字、下划线和短横线', icon: 'none' })
+      return
+    }
+    const list = [...this.data.trainers]
+    if (list.some(item => item.id === id)) {
+      wx.showToast({ title: '该操作师ID已经存在', icon: 'none' })
+      return
+    }
     list.push({
-      id: newTrainerId.trim(),
-      name: newTrainerName.trim(),
-      channel: newChannel,
-      sceneParam: `channel=${newChannel}&trainer=${encodeURIComponent(newTrainerId.trim())}&name=${encodeURIComponent(newTrainerName.trim())}`
+      id,
+      name,
+      channel: newChannel
     })
-    wx.setStorageSync('trainers', list)
-    this.setData({
-      trainers: list,
-      newTrainerId: '',
-      newTrainerName: '',
-      showAddForm: false
+    this._saveTrainers(list).then(() => {
+      this.setData({ newTrainerId: '', newTrainerName: '', showAddForm: false })
+      wx.showToast({ title: '已添加并同步', icon: 'success' })
+    }).catch(err => {
+      wx.showToast({ title: err.message || '添加失败，请重试', icon: 'none' })
     })
-    wx.showToast({ title: '已添加', icon: 'success' })
   },
 
   deleteTrainer(e) {
@@ -73,9 +115,12 @@ Page({
       content: '删除该操作师配置？',
       success: (res) => {
         if (res.confirm) {
-          const list = (wx.getStorageSync('trainers') || []).filter(t => t.id !== id)
-          wx.setStorageSync('trainers', list)
-          this.setData({ trainers: list })
+          const list = this.data.trainers.filter(t => t.id !== id)
+          this._saveTrainers(list).then(() => {
+            wx.showToast({ title: '已删除并同步', icon: 'success' })
+          }).catch(err => {
+            wx.showToast({ title: err.message || '删除失败，请重试', icon: 'none' })
+          })
         }
       }
     })

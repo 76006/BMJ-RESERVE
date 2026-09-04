@@ -7,7 +7,22 @@ Page({
   },
 
   onShow() {
+    const app = getApp()
+    if (!app.globalData.isAdmin) {
+      wx.navigateBack()
+      return
+    }
+
+    // 先显示现有缓存保证页面响应，再用云端最新数据覆盖。
     this.loadData()
+    const refreshSeq = (this._refreshSeq || 0) + 1
+    this._refreshSeq = refreshSeq
+    if (app._loadAllBookingsAsAdmin) {
+      app._loadAllBookingsAsAdmin().then(() => {
+        if (refreshSeq !== this._refreshSeq) return
+        this.loadData()
+      })
+    }
   },
 
   loadData() {

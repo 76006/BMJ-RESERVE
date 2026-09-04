@@ -195,9 +195,10 @@ Page({
       visitTimeIdx: -1,
       visitTimeText: '',
       slotStatus: []
+    }, () => {
+      // 根据时段管理设置 + 已占用情况过滤可选时间段（异步）
+      this.filterAvailableSlots(date)
     })
-    // 根据时段管理设置 + 已占用情况过滤可选时间段（异步）
-    this.filterAvailableSlots(date)
   },
 
   // 读取某天可选时段并标注三态：
@@ -207,29 +208,28 @@ Page({
   // 逻辑：可选 = 开启(操作师开放) ∩ 未占用
   filterAvailableSlots(date) {
     const app = getApp()
-    const self = this
+    const requestId = (this._slotRequestId || 0) + 1
+    this._slotRequestId = requestId
+    const isCurrentRequest = () => requestId === this._slotRequestId && this.data.visitDate === date
 
-    // 先查云端开放时段（操作师设置），再叠加占用情况
-    app.getSchedule(date).then(openSlots => {
-      // openSlots: 该日开放的时段数组；空数组=全关闭
-      const openSet = new Set(openSlots || [])
-
-      app.getOccupiedSlots(date).then(occupiedMap => {
-        // 构建完整三态列表（基于全部 TIME_SLOTS，关闭项也展示以提示用户）
+    // 开放时段和占用情况并行读取；只有最后一次选中日期的结果可以更新页面。
+    return Promise.all([app.getSchedule(date), app.getOccupiedSlots(date)])
+      .then(([openSlots, occupiedMap]) => {
+        if (!isCurrentRequest()) return
+        const openSet = new Set(openSlots || [])
         const fullSlots = TIME_SLOTS
         const fullStatus = fullSlots.map(s => {
-          if (!self._isFutureSlot(date, s)) return 'past'
+          if (!this._isFutureSlot(date, s)) return 'past'
           if (!openSet.has(s)) return 'closed'
           if (occupiedMap[s]) return 'booked'
           return 'free'
         })
 
-        // picker 只放仍未开始且未被占用的开放时段。
         const available = fullSlots.filter((s, idx) => openSet.has(s) && fullStatus[idx] === 'free')
         const availableStatus = available.map(s => fullStatus[fullSlots.indexOf(s)])
 
         if (available.length === 0) {
-          self.setData({
+          this.setData({
             timeSlots: [],
             slotStatus: fullStatus,
             allSlots: fullSlots,
@@ -237,15 +237,28 @@ Page({
             visitTimeText: '该日期暂无可预约时段'
           })
         } else {
-          self.setData({
+          this.setData({
             timeSlots: available,
             slotStatus: availableStatus,
             allSlots: fullSlots,
-            allSlotStatus: fullStatus
+            allSlotStatus: fullStatus,
+            visitTimeText: ''
           })
         }
       })
-    })
+      .catch(err => {
+        if (!isCurrentRequest()) return
+        console.warn('[预约时段] 读取失败:', err)
+        this.setData({
+          timeSlots: [],
+          slotStatus: [],
+          allSlots: TIME_SLOTS,
+          allSlotStatus: [],
+          visitTimeIdx: -1,
+          visitTimeText: '时段读取失败，请重新选择日期'
+        })
+        wx.showToast({ title: '可预约时段读取失败，请重试', icon: 'none' })
+      })
   },
 
   onVisitTime(e) {

@@ -94,9 +94,6 @@ Page({
       _day90FollowUp: '',
       _adminNote: '',
       _followUpRecords: [],
-      _feedback24: true,
-      _feedback30: false,
-      _feedback90: false
     }
 
     app.getOpenId(function(openid) {

@@ -2,11 +2,13 @@
 const cloud = require('wx-server-sdk')
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 const db = cloud.database()
+const _ = db.command
 
 const DAY30_TEMPLATE_ID = 'nV6Oc0UnmsGkZbpcBXBcUPRpkRzR4B__uX5TU_M9xUo'
 const DAY90_TEMPLATE_ID = 'j7okEfYaR9VoT0M3Lt2T79tUjWinkC_1CjEMmfCpkSw'
 const ACTIVE_STATUSES = new Set(['visited', 'in_experience', 'completed'])
 const DAY_MS = 24 * 60 * 60 * 1000
+const REMINDER_RETRY_DAYS = 30
 
 function clip(value, maxLength) {
   return String(value == null ? '' : value).trim().slice(0, maxLength)
@@ -71,11 +73,16 @@ function reminderConfig(booking, stage) {
 
 async function loadAllBookings() {
   const output = []
-  for (let offset = 0; offset < 1000; offset += 100) {
-    const res = await db.collection('bookings').skip(offset).limit(100).get()
+  let lastId = ''
+  while (true) {
+    let query = db.collection('bookings')
+    if (lastId) query = query.where({ _id: _.gt(lastId) })
+    const res = await query.orderBy('_id', 'asc').limit(100).get()
     const rows = res.data || []
     output.push(...rows)
     if (rows.length < 100) break
+    lastId = rows[rows.length - 1]._id
+    if (!lastId) break
   }
   return output
 }
@@ -117,9 +124,9 @@ exports.main = async () => {
     if (!recipient || !ACTIVE_STATUSES.has(booking._status)) continue
     const days = daysSinceService(booking)
     const jobs = []
-    // 到期后保留7天重试窗口，避免偶发云函数失败造成永久漏发，也避免长期反复尝试。
-    if (days >= 30 && days <= 36 && !booking._reminder30SentAt) jobs.push(30)
-    if (days >= 90 && days <= 96 && !booking._reminder90SentAt) jobs.push(90)
+    // 到期后保留30天重试窗口，兼顾偶发失败和订阅授权补充，不无限重复请求。
+    if (days >= 30 && days < 30 + REMINDER_RETRY_DAYS && !booking._reminder30SentAt) jobs.push(30)
+    if (days >= 90 && days < 90 + REMINDER_RETRY_DAYS && !booking._reminder90SentAt) jobs.push(90)
 
     for (const stage of jobs) {
       const result = await sendOne(booking, stage)
