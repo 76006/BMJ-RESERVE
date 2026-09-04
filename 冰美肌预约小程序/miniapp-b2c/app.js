@@ -626,10 +626,6 @@ App({
     const booking = this._find(bookingId)
     if (!booking) return Promise.reject(new Error('预约记录不存在'))
     if (booking._status !== 'confirmed') return Promise.reject(new Error('当前状态不可签到'))
-    const nowDate = new Date()
-    const pad = value => String(value).padStart(2, '0')
-    const today = `${nowDate.getFullYear()}-${pad(nowDate.getMonth() + 1)}-${pad(nowDate.getDate())}`
-    if (booking.visitDate !== today) return Promise.reject(new Error('只能在预约当天到店签到'))
     if (!booking.consentSignTime) return Promise.reject(new Error('请先完成知情同意书签署'))
     const now = new Date().toISOString()
     // 签到时间和“已到店”状态一次提交，避免两个请求先后顺序不确定。
@@ -641,7 +637,7 @@ App({
     })
   },
 
-  // 顾客扫码签到专用入口：由云端校验预约归属、日期、状态和签署内容。
+  // 顾客扫码签到专用入口：由云端校验预约归属、状态和签署内容；允许提前到店。
   completeGuestCheckin(bookingId, signData) {
     const self = this
     return wx.cloud.callFunction({
@@ -1089,7 +1085,12 @@ App({
         return false
       })
       .map(b => {
-        const diff = daysDiff(b.visitDate)
+        // 客户提前到店时，护理须知、30/90天照片和提醒均从实际签到日开始计算。
+        const checkInTimestamp = Date.parse(b.checkInAt || '')
+        const serviceDate = Number.isFinite(checkInTimestamp)
+          ? new Date(checkInTimestamp + 8 * 60 * 60 * 1000).toISOString().slice(0, 10)
+          : b.visitDate
+        const diff = daysDiff(serviceDate)
         // 护理须知按体验日期触发。
         const getAvailable = (diff) => {
           const items = []
@@ -1104,6 +1105,19 @@ App({
         const photoUploadStages = []
         if (diff >= 30) photoUploadStages.push({ stage: '30', label: '上传30天照片' })
         if (diff >= 90) photoUploadStages.push({ stage: '90', label: '上传90天照片' })
+        const followupQuestionnaireStages = []
+        if (diff >= 30) {
+          followupQuestionnaireStages.push({
+            mode: '30',
+            label: b._followupFeedback30 ? '查看或修改30天回访问卷' : '填写30天回访问卷'
+          })
+        }
+        if (diff >= 90) {
+          followupQuestionnaireStages.push({
+            mode: '90',
+            label: b._followupFeedback90 ? '查看或修改90天回访问卷' : '填写90天回访问卷'
+          })
+        }
         const canUploadFollowupPhotos = photoUploadStages.length > 0 &&
           (b._status === 'visited' || b._status === 'in_experience' || b._status === 'completed')
         const reminderStages = []
@@ -1131,6 +1145,9 @@ App({
           userStatus: STATUS_MAP[b._status] ? STATUS_MAP[b._status].user : (console.warn('[数据异常] booking', b.id||b._id, '_status 不是6个合法值之一:', b._status), ''),
           canAftercare: canAftercare,
           availableAftercares: availableAftercares,
+          canServiceFeedback: b._status === 'completed',
+          hasServiceFeedback: !!(b._serviceFeedback && b._serviceFeedback.submittedAt),
+          followupQuestionnaireStages: followupQuestionnaireStages,
           canUploadFollowupPhotos: canUploadFollowupPhotos,
           photoUploadStages: photoUploadStages,
           canSubscribeReminders: reminderStages.length > 0,

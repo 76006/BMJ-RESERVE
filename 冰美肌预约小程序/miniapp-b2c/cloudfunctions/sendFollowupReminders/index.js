@@ -44,7 +44,7 @@ function serviceTime(booking) {
 }
 
 function reminderConfig(booking, stage) {
-  const page = `pages/photo-upload/photo-upload?id=${encodeURIComponent(booking.id || '')}&stage=${stage}`
+  const page = `pages/feedback/feedback?recordId=${encodeURIComponent(booking.id || '')}&mode=${stage}`
   if (stage === 30) {
     return {
       templateId: DAY30_TEMPLATE_ID,

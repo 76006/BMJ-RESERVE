@@ -1,9 +1,8 @@
 // 顾客签到页（扫门店签到码 → 自动识别预约 → 内嵌知情同意书 → 完成）
 // 自动识别逻辑：
 //   1. 新版小程序码直接进入本页并携带 scene；旧版码仍由 app.js 首页中转兼容
-//   2. 无 bookingId 时：从 userProfile 取手机号，先本地匹配今日预约（暖启动即时），
-//      本地未命中 → 再云端按「手机号 + 今日」查询未签到预约（修复冷启动时序 + 兼容操作师代下）
-//   3. 仍无匹配：进入 not_found，提供"手动选择今日预约"兜底列表
+//   2. 无 bookingId 时：从 userProfile 取手机号，匹配今天及之后已确认的预约；允许提前到店。
+//   3. 仍无匹配：进入 not_found，提供“手动选择可签到预约”兜底列表。
 // 数据补全：匹配到手机号后，自动从历史 booking 记录中提取姓名/性别/年龄/身份证等字段
 
 function parseScene(raw) {
@@ -84,12 +83,12 @@ Page({
       return
     }
 
-    // 情况2：扫门店签到码，从 userProfile 自动匹配今日预约
+    // 情况2：扫门店签到码，从 userProfile 自动匹配可签到预约
     //   优先用本地已加载的预约（暖启动即时匹配）；
     //   若本地无匹配，再走云端按手机号查询（修复冷启动时序、兼容操作师代下）
     const profile = app.getUserProfile()
     if (profile && profile.phone) {
-      const matched = this._matchTodayBooking(profile.phone, today)
+      const matched = this._matchCheckinBooking(profile.phone, today)
       if (matched) {
         const merged = this._mergeCustomerData(matched)
         this.setData({ step: 'confirm', booking: merged, bookingData: merged })
@@ -97,7 +96,7 @@ Page({
       }
     }
 
-    // 情况3：本地未匹配 → 云端按手机号查询今日未签到预约（兜底）
+    // 情况3：本地未匹配 → 云端按手机号查询今天及之后的未签到预约
     this._resolveByCloud(profile && profile.phone ? profile.phone : '', today)
   },
 
@@ -158,17 +157,17 @@ Page({
         return
       }
       if (cloudBookings.length > 1) {
-        const list = self._getTodayBookings(today, cloudBookings)
+        const list = self._getCheckinBookings(today, cloudBookings)
         self.setData({ step: 'not_found', todayBookings: list, needsPhoneAuth: false })
         return
       }
 
       // 云端也无匹配 → not_found，附带"手动选择今日预约"兜底（尽力用本地数据）
-      const fallback = self._getTodayBookings(today)
+      const fallback = self._getCheckinBookings(today)
       self.setData({ step: 'not_found', todayBookings: fallback, needsPhoneAuth: false })
     }).catch(function (err) {
       console.warn('[签到] 云端查询失败，降级到本地:', err)
-      const fallback = self._getTodayBookings(today)
+      const fallback = self._getCheckinBookings(today)
       self.setData({
         step: 'not_found',
         todayBookings: fallback,
@@ -181,7 +180,7 @@ Page({
   _fetchTodayByPhone(phone, today) {
     return wx.cloud.callFunction({
       name: 'bookingService',
-      data: { action: 'listToday', visitDate: today }
+      data: { action: 'listCheckinCandidates' }
     }).then(function (res) {
         const result = res.result || {}
         if (!result.success) {
@@ -267,37 +266,43 @@ Page({
     })
   },
 
-  // 自动匹配今日预约
-  _matchTodayBooking(phone, today) {
+  // 自动匹配今天及之后最接近的一条预约；多条时交给用户选择。
+  _matchCheckinBooking(phone, today) {
     const app = getApp()
     const all = app.globalData.bookings || []
     const clean = s => (s || '').replace(/\*/g, '').trim()
     const p = clean(phone)
 
     const matches = all.filter(b => {
-      if (b.visitDate !== today) return false
+      if (String(b.visitDate || '') < today) return false
       if (b.checkInAt) return false
       if (b._status !== 'confirmed') return false
       const bp = clean(b.phone)
       return bp === p
+    }).sort((a, b) => {
+      const dateResult = String(a.visitDate || '').localeCompare(String(b.visitDate || ''))
+      return dateResult || String(a.visitTime || '').localeCompare(String(b.visitTime || ''))
     })
 
-    return matches.length > 0 ? matches[0] : null
+    return matches.length === 1 ? matches[0] : null
   },
 
-  // 获取今日"可签到"的预约列表（用于 not_found 兜底手动选择）
-  // 仅返回：今天、未签到、状态为已预约的预约
+  // 获取今天及之后可签到的预约列表（用于 not_found 兜底手动选择）。
   // @param {Array} [list] 可选，外部传入的预约列表（如云端按手机号查回的结果）；缺省回退到 globalData.bookings
-  _getTodayBookings(today, list) {
+  _getCheckinBookings(today, list) {
     const app = getApp()
     const all = list || app.globalData.bookings || []
     const clean = s => (s || '').replace(/\*/g, '').trim()
     return all
       .filter(b => {
-        if (b.visitDate !== today) return false
+        if (String(b.visitDate || '') < today) return false
         if (b.checkInAt) return false
         if (b._status !== 'confirmed') return false
         return true
+      })
+      .sort((a, b) => {
+        const dateResult = String(a.visitDate || '').localeCompare(String(b.visitDate || ''))
+        return dateResult || String(a.visitTime || '').localeCompare(String(b.visitTime || ''))
       })
       .map(b => ({
         id: b.id,
@@ -319,12 +324,7 @@ Page({
       wx.showToast({ title: '预约不存在', icon: 'none' })
       return
     }
-    // 防御：仅允许今天且未签到的预约进入签署流程
-    const today = this.data.today
-    if (full.visitDate !== today) {
-      wx.showToast({ title: '该预约不是今天的', icon: 'none' })
-      return
-    }
+    // 只允许已确认且尚未签到的预约进入签署流程；允许提前到店。
     if (full.checkInAt) {
       wx.showToast({ title: '该预约已签到', icon: 'none' })
       // 从兜底列表中移除已签到项，避免重复选择

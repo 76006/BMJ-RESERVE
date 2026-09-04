@@ -1,0 +1,91 @@
+<nav-bar title="效果反馈" showBack="{{true}}"></nav-bar>
+<view class="page">
+  <view class="loading" wx:if="{{loading}}">正在读取回访问卷...</view>
+
+  <block wx:else>
+    <view class="preview-banner" wx:if="{{isPreview}}">预览模式 · 这是用户看到的问卷页面</view>
+    <view class="header">
+      <view class="header-badge">{{modeLabel}}</view>
+      <view class="header-title">感谢您的反馈</view>
+      <view class="header-desc">您的反馈将帮助我们持续改善产品效果与门店服务</view>
+      <view class="submitted" wx:if="{{hasSubmitted}}">已提交过，本次保存将更新原问卷</view>
+    </view>
+
+    <block wx:if="{{mode === 'service'}}">
+      <view class="section" wx:for="{{serviceGroups}}" wx:for-item="group" wx:key="title">
+        <view class="section-title">{{group.title}}</view>
+        <view class="satisfaction-list">
+          <view class="satisfy-item" wx:for="{{group.items}}" wx:for-item="rating" wx:key="key">
+            <view class="area-name">{{rating.label}}</view>
+            <view class="stars">
+              <text wx:for="{{[1,2,3,4,5]}}" wx:for-item="star" wx:key="*this" class="star {{rating.score >= star ? 'active' : ''}}" data-key="{{rating.key}}" data-score="{{star}}" bindtap="onServiceRate">★</text>
+            </view>
+          </view>
+        </view>
+      </view>
+    </block>
+
+    <block wx:else>
+      <view class="section">
+        <view class="section-title">各部位改善满意度</view>
+        <view class="satisfaction-list">
+          <view class="satisfy-item" wx:for="{{areas}}" wx:key="key">
+            <view class="area-name">{{item.label}}</view>
+            <view class="stars">
+              <text wx:for="{{[1,2,3,4,5]}}" wx:for-item="star" wx:key="*this" class="star {{item.score >= star ? 'active' : ''}}" data-key="{{item.key}}" data-score="{{star}}" bindtap="onRate">★</text>
+            </view>
+          </view>
+        </view>
+      </view>
+
+      <view class="section">
+        <view class="section-title">体验满意度</view>
+        <view class="satisfaction-list">
+          <view class="satisfy-item" wx:for="{{experience}}" wx:key="key">
+            <view class="area-name">{{item.label}}</view>
+            <view class="stars">
+              <text wx:for="{{[1,2,3,4,5]}}" wx:for-item="star" wx:key="*this" class="star {{item.score >= star ? 'active' : ''}}" data-key="{{item.key}}" data-score="{{star}}" bindtap="onExperienceRate">★</text>
+            </view>
+          </view>
+        </view>
+      </view>
+
+      <view class="section">
+        <view class="section-title">上传面部照片（五个角度）</view>
+        <view class="photo-grid">
+          <view class="photo-card" wx:for="{{photos}}" wx:key="index">
+            <text class="angle-label">{{item.angle}}</text>
+            <view class="photo-box" wx:if="{{item.path}}" data-index="{{item.index}}" bindtap="previewPhoto">
+              <image class="photo-image" src="{{item.path}}" mode="aspectFill" />
+              <view class="replace-hint" data-index="{{item.index}}" catchtap="choosePhoto">更换</view>
+              <view class="delete-btn" data-index="{{item.index}}" catchtap="deletePhoto">删除</view>
+            </view>
+            <view class="photo-box empty" wx:else data-index="{{item.index}}" bindtap="choosePhoto">
+              <text class="plus">+</text>
+              <text class="upload-label">{{uploadingIndex === item.index ? '上传中' : '点击上传'}}</text>
+            </view>
+          </view>
+        </view>
+        <view class="photo-hint">每张照片上传后会自动保存，无需再次提交。</view>
+      </view>
+    </block>
+
+    <view class="section">
+      <view class="section-title">{{mode === 'service' ? '意见与建议' : textLabel}}</view>
+      <textarea class="feedback-textarea" placeholder="如有其他建议或感受，请在此填写（选填）" value="{{remark}}" bindinput="onRemark" maxlength="500" />
+    </view>
+
+    <view class="section" wx:if="{{mode === '90'}}">
+      <view class="section-title">{{retryLabel}}</view>
+      <view class="retry-toggle">
+        <view class="retry-opt {{retry === 'yes' ? 'active' : ''}}" data-value="yes" bindtap="onRetry">是，希望再次体验</view>
+        <view class="retry-opt {{retry === 'no' ? 'active' : ''}}" data-value="no" bindtap="onRetry">否，暂不考虑</view>
+      </view>
+      <textarea class="feedback-textarea" wx:if="{{retry}}" placeholder="请补充说明原因（选填）" value="{{retryReason}}" bindinput="onRetryReason" maxlength="300" />
+    </view>
+
+    <view class="submit-bar">
+      <button class="btn-submit" loading="{{submitting}}" disabled="{{submitting}}" bindtap="submitFeedback">{{hasSubmitted ? '更新反馈' : '提交反馈'}}</button>
+    </view>
+  </block>
+</view>

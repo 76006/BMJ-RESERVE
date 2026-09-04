@@ -554,6 +554,14 @@
   font-size: 22rpx;
   color: var(--mid-gray);
 }
+.feedback-score {
+  color: #D97706;
+  font-weight: 700;
+}
+.feedback-comment {
+  white-space: pre-wrap;
+  line-height: 1.65;
+}
 .comp-actions {
   display: flex;
   align-items: center;

@@ -387,6 +387,9 @@ async function createBooking(openId, event) {
     _immediatePhotos: [],
     _day30Photos: [],
     _day90Photos: [],
+    _serviceFeedback: null,
+    _followupFeedback30: null,
+    _followupFeedback90: null,
     _productFeedback: '',
     _day30FollowUp: '',
     _day90FollowUp: '',
@@ -556,6 +559,29 @@ async function listToday(openId, visitDate) {
   return { success: true, data }
 }
 
+// 门店通用签到码使用：返回当前顾客今天及之后所有已确认、未签到的预约。
+// 顾客可以提前到店，因此这里不再只查询预约当天。
+async function listCheckinCandidates(openId) {
+  const phone = await getVerifiedPhone(openId)
+  if (!phone) {
+    return { success: false, data: [], requiresPhoneAuth: true, error: '请先授权预约手机号，以便识别您的预约' }
+  }
+  const results = await Promise.all([
+    loadAllBookingsByCondition({ _creatorOpenId: openId }),
+    loadAllBookingsByCondition({ _openid: openId }),
+    loadAllBookingsByCondition({ phone })
+  ])
+  const today = todayInChina()
+  const data = mergeUnique(results)
+    .filter(item => !item.checkInAt && item._status === 'confirmed' && String(item.visitDate || '') >= today)
+    .sort((a, b) => {
+      const dateResult = String(a.visitDate || '').localeCompare(String(b.visitDate || ''))
+      return dateResult || String(a.visitTime || '').localeCompare(String(b.visitTime || ''))
+    })
+    .map(publicCheckinBooking)
+  return { success: true, data }
+}
+
 function publicCheckinBooking(booking) {
   return {
     id: booking.id || '',
@@ -591,7 +617,6 @@ async function getForCheckin(openId, bookingId) {
     return { success: false, requiresPhoneAuth: true, error: '请先授权预约手机号，以便确认预约归属' }
   }
   if (!access.allowed) return { success: false, error: '该预约不属于当前微信账号' }
-  if (booking.visitDate !== todayInChina()) return { success: false, error: '只能在预约当天到店签到' }
   if (booking._status !== 'confirmed') return { success: false, error: '该预约当前不可签到' }
   if (booking.checkInAt) return { success: false, error: '该预约已经完成签到' }
 
@@ -634,7 +659,6 @@ async function completeCheckin(openId, event) {
     const freshRes = await bookingRef.get()
     const fresh = freshRes && freshRes.data
     if (!fresh) throw businessError('BOOKING_NOT_FOUND', '预约不存在')
-    if (fresh.visitDate !== todayInChina()) throw businessError('CHECKIN_NOT_TODAY', '只能在预约当天到店签到')
     if (fresh._status !== 'confirmed') throw businessError('INVALID_STATUS', '该预约当前不可签到')
     if (fresh.checkInAt) throw businessError('ALREADY_CHECKED_IN', '该预约已经完成签到')
 
@@ -690,6 +714,206 @@ async function startExperience(openId, event) {
     await bookingRef.update({ data: { _status: 'in_experience', updatedAt: now } })
   }, 5)
   return { success: true, data: { _status: 'in_experience', updatedAt: now } }
+}
+
+const SERVICE_FEEDBACK_RATING_KEYS = [
+  'overall', 'professional', 'attentive', 'communication',
+  'environment', 'flow', 'device', 'recommend'
+]
+
+function publicServiceFeedbackBooking(booking) {
+  return {
+    id: booking.id || '',
+    name: booking.name || '',
+    visitDate: booking.visitDate || '',
+    visitTime: booking.visitTime || '',
+    status: booking._status || '',
+    feedback: booking._serviceFeedback || null
+  }
+}
+
+function normalizeServiceFeedback(input, existing) {
+  const source = input && typeof input === 'object' ? input : {}
+  const feedback = {}
+  SERVICE_FEEDBACK_RATING_KEYS.forEach(key => {
+    const score = Number(source[key])
+    if (!Number.isInteger(score) || score < 1 || score > 5) {
+      throw businessError('INVALID_FEEDBACK', '请完成所有评分后再提交')
+    }
+    feedback[key] = score
+  })
+  const now = new Date().toISOString()
+  feedback.comment = cleanText(source.comment, 500)
+  feedback.submittedAt = existing && existing.submittedAt ? existing.submittedAt : now
+  feedback.updatedAt = now
+  return feedback
+}
+
+async function getServiceFeedback(openId, event) {
+  const bookingId = cleanText(event.bookingId, 40)
+  if (!bookingId) return { success: false, error: '缺少预约编号' }
+  const res = await db.collection('bookings').where({ id: bookingId }).limit(1).get()
+  const booking = res.data && res.data[0]
+  if (!booking) return { success: false, error: '预约不存在' }
+  const access = await getBookingAccess(openId, booking)
+  if (!access.allowed && !access.phone) {
+    return { success: false, requiresPhoneAuth: true, error: '请先在“我的”页面授权预约手机号' }
+  }
+  if (!access.allowed) return { success: false, error: '该预约不属于当前微信账号' }
+
+  if (!access.owner && access.phoneOwner) {
+    const now = new Date().toISOString()
+    await db.collection('bookings').doc(booking._id).update({
+      data: { _openid: openId, _creatorOpenId: openId, _customerBoundAt: now, updatedAt: now }
+    })
+    booking._openid = openId
+    booking._creatorOpenId = openId
+  }
+  return { success: true, data: publicServiceFeedbackBooking(booking) }
+}
+
+async function saveServiceFeedback(openId, event) {
+  const bookingId = cleanText(event.bookingId, 40)
+  if (!bookingId) return { success: false, error: '缺少预约编号' }
+  const res = await db.collection('bookings').where({ id: bookingId }).limit(1).get()
+  const booking = res.data && res.data[0]
+  if (!booking) return { success: false, error: '预约不存在' }
+  const access = await getBookingAccess(openId, booking)
+  if (!access.allowed) return { success: false, error: '无权评价该预约' }
+  if (booking._status !== 'completed') {
+    return { success: false, error: '体验完成后才能评价本次服务' }
+  }
+
+  const feedback = normalizeServiceFeedback(event.feedback, booking._serviceFeedback)
+  const data = { _serviceFeedback: feedback, updatedAt: feedback.updatedAt }
+  if (!access.owner && access.phoneOwner) {
+    data._openid = openId
+    data._creatorOpenId = openId
+    data._customerBoundAt = feedback.updatedAt
+  }
+  await db.collection('bookings').doc(booking._id).update({ data })
+  booking._serviceFeedback = feedback
+  return { success: true, data: publicServiceFeedbackBooking(booking) }
+}
+
+const FOLLOWUP_AREA_KEYS = new Set([
+  'nasolabial', 'forehead', 'marionette', 'skintone', 'applemuscle', 'jawline'
+])
+const FOLLOWUP_EXPERIENCE_KEYS = new Set([
+  'environment', 'quiet', 'device', 'flow', 'recommend'
+])
+
+function followupFeedbackField(mode) {
+  if (String(mode) === '30') return '_followupFeedback30'
+  if (String(mode) === '90') return '_followupFeedback90'
+  return ''
+}
+
+function normalizeFeedbackRatings(input, allowedKeys) {
+  const source = Array.isArray(input) ? input : []
+  const seen = new Set()
+  return source.filter(item => item && allowedKeys.has(String(item.key || ''))).map(item => {
+    const key = String(item.key)
+    if (seen.has(key)) throw businessError('INVALID_FOLLOWUP_FEEDBACK', '问卷评分项目重复')
+    seen.add(key)
+    const score = Number(item.score)
+    if (!Number.isInteger(score) || score < 0 || score > 5) {
+      throw businessError('INVALID_FOLLOWUP_FEEDBACK', '问卷评分格式不正确')
+    }
+    return { key, label: cleanText(item.label, 60), score }
+  })
+}
+
+function normalizeFollowupFeedback(input, mode, existing) {
+  const source = input && typeof input === 'object' ? input : {}
+  const areas = normalizeFeedbackRatings(source.areas, FOLLOWUP_AREA_KEYS)
+  const experience = normalizeFeedbackRatings(source.experience, FOLLOWUP_EXPERIENCE_KEYS)
+  if (!areas.some(item => item.score > 0)) {
+    throw businessError('INVALID_FOLLOWUP_FEEDBACK', '请至少评价一个改善部位')
+  }
+  const retry = String(source.retry || '')
+  if (String(mode) === '90' && !['yes', 'no'].includes(retry)) {
+    throw businessError('INVALID_FOLLOWUP_FEEDBACK', '请选择二次体验意愿')
+  }
+  const now = new Date().toISOString()
+  return {
+    mode: String(mode),
+    areas,
+    experience,
+    remark: cleanText(source.remark, 500),
+    retry: String(mode) === '90' ? retry : '',
+    retryReason: String(mode) === '90' ? cleanText(source.retryReason, 300) : '',
+    submittedAt: existing && existing.submittedAt ? existing.submittedAt : now,
+    updatedAt: now
+  }
+}
+
+function publicFollowupQuestionnaireBooking(booking, mode) {
+  const feedbackField = followupFeedbackField(mode)
+  const photoField = followupPhotoField(mode)
+  return {
+    id: booking.id || '',
+    name: booking.name || '',
+    visitDate: booking.visitDate || '',
+    visitTime: booking.visitTime || '',
+    mode: String(mode),
+    feedback: booking[feedbackField] || null,
+    photos: Array.from({ length: 5 }, (_, index) => {
+      const source = Array.isArray(booking[photoField]) ? booking[photoField] : []
+      return source[index] || null
+    })
+  }
+}
+
+async function getFollowupQuestionnaire(openId, event) {
+  const bookingId = cleanText(event.bookingId, 40)
+  const mode = String(event.mode || '')
+  if (!bookingId) return { success: false, error: '缺少预约编号' }
+  if (!followupFeedbackField(mode)) return { success: false, error: '问卷阶段不正确' }
+  const res = await db.collection('bookings').where({ id: bookingId }).limit(1).get()
+  const booking = res.data && res.data[0]
+  if (!booking) return { success: false, error: '预约不存在' }
+  const access = await getBookingAccess(openId, booking)
+  if (!access.allowed && !access.phone) {
+    return { success: false, requiresPhoneAuth: true, error: '请先在“我的”页面授权预约手机号' }
+  }
+  if (!access.allowed) return { success: false, error: '该预约不属于当前微信账号' }
+  if (!['visited', 'in_experience', 'completed'].includes(booking._status)) {
+    return { success: false, error: '完成到店签到后才能填写回访问卷' }
+  }
+  if (daysSinceService(booking) < Number(mode)) {
+    return { success: false, error: `体验后${mode}天才可填写本阶段问卷` }
+  }
+  return { success: true, data: publicFollowupQuestionnaireBooking(booking, mode) }
+}
+
+async function saveFollowupQuestionnaire(openId, event) {
+  const bookingId = cleanText(event.bookingId, 40)
+  const mode = String(event.mode || '')
+  const feedbackField = followupFeedbackField(mode)
+  if (!bookingId) return { success: false, error: '缺少预约编号' }
+  if (!feedbackField) return { success: false, error: '问卷阶段不正确' }
+  const res = await db.collection('bookings').where({ id: bookingId }).limit(1).get()
+  const booking = res.data && res.data[0]
+  if (!booking) return { success: false, error: '预约不存在' }
+  const access = await getBookingAccess(openId, booking)
+  if (!access.allowed) return { success: false, error: '无权填写该预约的回访问卷' }
+  if (!['visited', 'in_experience', 'completed'].includes(booking._status)) {
+    return { success: false, error: '完成到店签到后才能填写回访问卷' }
+  }
+  if (daysSinceService(booking) < Number(mode)) {
+    return { success: false, error: `体验后${mode}天才可填写本阶段问卷` }
+  }
+  const feedback = normalizeFollowupFeedback(event.feedback, mode, booking[feedbackField])
+  const data = { [feedbackField]: feedback, updatedAt: feedback.updatedAt }
+  if (!access.owner && access.phoneOwner) {
+    data._openid = openId
+    data._creatorOpenId = openId
+    data._customerBoundAt = feedback.updatedAt
+  }
+  await db.collection('bookings').doc(booking._id).update({ data })
+  booking[feedbackField] = feedback
+  return { success: true, data: publicFollowupQuestionnaireBooking(booking, mode) }
 }
 
 function followupPhotoField(stage) {
@@ -872,13 +1096,6 @@ async function updateBooking(openId, event) {
       const freshRes = await bookingRef.get()
       const freshBooking = freshRes && freshRes.data
       if (!freshBooking) throw businessError('BOOKING_NOT_FOUND', '预约不存在')
-      if (
-        freshBooking._status === 'confirmed' &&
-        (data._status === 'visited' || data._status === 'in_experience') &&
-        freshBooking.visitDate !== todayInChina()
-      ) {
-        throw businessError('CHECKIN_NOT_TODAY', '只能在预约当天到店签到')
-      }
       if (!validStatusChange(freshBooking, data._status, data)) {
         throw businessError(
           'INVALID_STATUS',
@@ -915,11 +1132,16 @@ exports.main = async (event) => {
     if (event.action === 'create') return await createBooking(openId, event)
     if (event.action === 'listMine') return await listMine(openId)
     if (event.action === 'listToday') return await listToday(openId, event.visitDate)
+    if (event.action === 'listCheckinCandidates') return await listCheckinCandidates(openId)
     if (event.action === 'getForCheckin') {
       return await getForCheckin(openId, String(event.bookingId || '').trim())
     }
     if (event.action === 'completeCheckin') return await completeCheckin(openId, event)
     if (event.action === 'startExperience') return await startExperience(openId, event)
+    if (event.action === 'getServiceFeedback') return await getServiceFeedback(openId, event)
+    if (event.action === 'saveServiceFeedback') return await saveServiceFeedback(openId, event)
+    if (event.action === 'getFollowupQuestionnaire') return await getFollowupQuestionnaire(openId, event)
+    if (event.action === 'saveFollowupQuestionnaire') return await saveFollowupQuestionnaire(openId, event)
     if (event.action === 'getFollowupPhotoBooking') return await getFollowupPhotoBooking(openId, event)
     if (event.action === 'saveFollowupPhotos') return await saveFollowupPhotos(openId, event)
     if (event.action === 'getStaffNotifyConfig') return await getStaffNotifyConfig(openId)
@@ -935,14 +1157,17 @@ exports.main = async (event) => {
     if (message.includes('BOOKING_NOT_FOUND:')) {
       return { success: false, error: '预约不存在' }
     }
-    if (message.includes('CHECKIN_NOT_TODAY:')) {
-      return { success: false, error: '只能在预约当天到店签到' }
-    }
     if (message.includes('ALREADY_CHECKED_IN:')) {
       return { success: false, error: '该预约已经完成签到' }
     }
     if (message.includes('INVALID_PHOTOS:')) {
       return { success: false, error: message.split('INVALID_PHOTOS:').pop() }
+    }
+    if (message.includes('INVALID_FEEDBACK:')) {
+      return { success: false, error: message.split('INVALID_FEEDBACK:').pop() }
+    }
+    if (message.includes('INVALID_FOLLOWUP_FEEDBACK:')) {
+      return { success: false, error: message.split('INVALID_FOLLOWUP_FEEDBACK:').pop() }
     }
     return { success: false, error: err.message || '预约服务失败' }
   }

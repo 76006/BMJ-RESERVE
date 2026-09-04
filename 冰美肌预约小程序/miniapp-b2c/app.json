@@ -2,10 +2,12 @@
   "pages": [
     "pages/index/index",
     "pages/mine/mine",
+    "pages/feedback/feedback",
     "pages/photo-upload/photo-upload",
     "pages/consent/consent",
     "pages/admin/list/list",
     "pages/admin/detail/detail",
+    "pages/admin/feedbacks/feedbacks",
     "pages/admin/checkin/checkin",
     "pages/admin/qrconfig/qrconfig",
     "pages/dashboard/dashboard",

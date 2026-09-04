@@ -22,14 +22,6 @@ Page({
       setTimeout(() => wx.navigateBack(), 1500)
       return
     }
-    const nowDate = new Date()
-    const pad = value => String(value).padStart(2, '0')
-    const today = `${nowDate.getFullYear()}-${pad(nowDate.getMonth() + 1)}-${pad(nowDate.getDate())}`
-    if (booking.visitDate !== today) {
-      wx.showToast({ title: '只能在预约当天到店签到', icon: 'none' })
-      setTimeout(() => wx.navigateBack(), 1500)
-      return
-    }
     const updates = { booking }
     if (!booking.consentSignName) {
       updates.needConsent = true

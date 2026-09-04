@@ -1,0 +1,82 @@
+<nav-bar title="回访问卷管理" showBack="{{true}}"></nav-bar>
+<view class="page">
+  <view class="loading" wx:if="{{loading}}">正在刷新回访问卷...</view>
+
+  <block wx:else>
+    <view class="stats-row">
+      <view class="stat-card"><view class="stat-num">{{fb24Count}}</view><view class="stat-label">24h回访</view></view>
+      <view class="stat-card"><view class="stat-num">{{fb30Count}}</view><view class="stat-label">30天回访</view></view>
+      <view class="stat-card"><view class="stat-num">{{fb90Count}}</view><view class="stat-label">90天回访</view></view>
+      <view class="stat-card"><view class="stat-num">{{avgScore}}</view><view class="stat-label">均满意度</view></view>
+      <view class="stat-card"><view class="stat-num">{{pendingCount}}</view><view class="stat-label">待回访</view></view>
+    </view>
+
+    <view class="tab-bar">
+      <view class="tab-item {{currentTab === 'list' ? 'active' : ''}}" bindtap="switchTab" data-tab="list">回访记录</view>
+      <view class="tab-item {{currentTab === 'template' ? 'active' : ''}}" bindtap="switchTab" data-tab="template">问卷编辑</view>
+    </view>
+
+    <block wx:if="{{currentTab === 'list'}}">
+      <view class="filter-bar">
+        <view class="filter-tag {{filterMode === 'all' ? 'active' : ''}}" bindtap="setFilter" data-mode="all">全部</view>
+        <view class="filter-tag {{filterMode === '24h' ? 'active' : ''}}" bindtap="setFilter" data-mode="24h">24h</view>
+        <view class="filter-tag {{filterMode === '30' ? 'active' : ''}}" bindtap="setFilter" data-mode="30">30天</view>
+        <view class="filter-tag {{filterMode === '90' ? 'active' : ''}}" bindtap="setFilter" data-mode="90">90天</view>
+      </view>
+
+      <view class="fb-list" wx:if="{{filteredFeedbacks.length > 0}}">
+        <view class="fb-card" wx:for="{{filteredFeedbacks}}" wx:key="recordKey" data-key="{{item.recordKey}}" bindtap="viewDetail">
+          <view class="fb-card-header">
+            <view class="fb-badge {{item.mode === '24h' ? 'badge-24h' : item.mode === '30' ? 'badge-30' : 'badge-90'}}">{{item.mode === '24h' ? '24h' : item.mode + '天'}}</view>
+            <text class="fb-name">{{item.customerName}}</text>
+            <text class="fb-overall">{{item.avgScore}}/5</text>
+          </view>
+          <view class="fb-card-body">
+            <view class="fb-row"><text class="fb-label">体验日期</text><text class="fb-value">{{item.serviceDate}}</text></view>
+            <view class="fb-row"><text class="fb-label">提交时间</text><text class="fb-value">{{item.submittedAt}}</text></view>
+            <view class="fb-row" wx:if="{{item.mode !== '24h'}}"><text class="fb-label">阶段照片</text><text class="fb-value">{{item.photoCount}}/5张</text></view>
+            <view class="fb-row" wx:if="{{item.reminderText}}"><text class="fb-label">消息提醒</text><text class="fb-value reminder-text">{{item.reminderText}}</text></view>
+            <view class="fb-note" wx:if="{{item.followupNote}}">工作人员回访：{{item.followupNote}}</view>
+            <view class="fb-note customer" wx:if="{{item.remark}}">客户反馈：{{item.remark}}</view>
+          </view>
+        </view>
+      </view>
+
+      <view class="empty-state" wx:else>
+        <text class="empty-text">暂无回访记录</text>
+        <text class="empty-hint">客户提交服务评价、30天或90天问卷后会显示在这里</text>
+      </view>
+    </block>
+
+    <block wx:if="{{currentTab === 'template'}}">
+      <view class="template-tip">
+        <text>点击任意题目即可修改。保存后云端立即生效，客户打开问卷时会读取最新内容。</text>
+        <text wx:if="{{questionnaireUpdatedAt}}">最近更新：{{questionnaireUpdatedAt}}</text>
+      </view>
+      <view class="tmpl-section">
+        <view class="tmpl-title">30天回访问卷（共{{tmpl30.length}}题）</view>
+        <view class="tmpl-item" wx:for="{{tmpl30}}" wx:key="key" data-index="{{index}}" data-mode="30" bindtap="editQuestion">
+          <text class="tmpl-index">{{index + 1}}</text>
+          <text class="tmpl-label">{{item.label}}</text>
+          <text class="tmpl-edit">编辑</text>
+        </view>
+        <view class="preview-btn" bindtap="preview30">预览用户端30天问卷</view>
+      </view>
+      <view class="tmpl-section">
+        <view class="tmpl-title">90天回访问卷（共{{tmpl90.length}}题）</view>
+        <view class="tmpl-item" wx:for="{{tmpl90}}" wx:key="key" data-index="{{index}}" data-mode="90" bindtap="editQuestion">
+          <text class="tmpl-index">{{index + 1}}</text>
+          <text class="tmpl-label">{{item.label}}</text>
+          <text class="tmpl-edit">编辑</text>
+        </view>
+        <view class="preview-btn" bindtap="preview90">预览用户端90天问卷</view>
+      </view>
+      <view class="tmpl-section reminder-section">
+        <view class="tmpl-title">回访消息提醒</view>
+        <view class="reminder-row"><text>30天回访提醒</text><text class="enabled">已接入订阅消息</text></view>
+        <view class="reminder-row"><text>90天回访提醒</text><text class="enabled">已接入订阅消息</text></view>
+        <view class="sms-hint">客户需在“我的”页面同意订阅；到期后系统消息会直接打开对应阶段问卷及照片上传页面。</view>
+      </view>
+    </block>
+  </block>
+</view>

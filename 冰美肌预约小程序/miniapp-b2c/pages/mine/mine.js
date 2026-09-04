@@ -333,6 +333,25 @@ Page({
     wx.navigateTo({ url: `/pages/photo-upload/photo-upload?id=${id}&stage=${stage}` })
   },
 
+  goServiceFeedback(e) {
+    const id = e.currentTarget.dataset.id
+    if (!id) {
+      wx.showToast({ title: '预约编号不存在', icon: 'none' })
+      return
+    }
+    wx.navigateTo({ url: `/pages/feedback/feedback?id=${id}` })
+  },
+
+  goFollowupFeedback(e) {
+    const id = e.currentTarget.dataset.id
+    const mode = String(e.currentTarget.dataset.mode || '')
+    if (!id || (mode !== '30' && mode !== '90')) {
+      wx.showToast({ title: '问卷阶段不正确', icon: 'none' })
+      return
+    }
+    wx.navigateTo({ url: `/pages/feedback/feedback?recordId=${id}&mode=${mode}` })
+  },
+
   subscribeBookingReminders(e) {
     const bookingId = e.currentTarget.dataset.id
     const booking = (this.data.bookings || []).find(item => item.id === bookingId)
@@ -396,6 +415,10 @@ Page({
 
   goDashboard() {
     this._openAdminPage('/pages/dashboard/dashboard')
+  },
+
+  goFeedbackAdmin() {
+    this._openAdminPage('/pages/admin/feedbacks/feedbacks')
   },
 
   goAdminSchedule() {

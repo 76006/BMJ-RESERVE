@@ -135,6 +135,53 @@
   </view>
 </view>
 
+<!-- ===== 顾客服务评价 ===== -->
+<view class="section" wx:if="{{booking._serviceFeedback}}">
+  <view class="section-title">顾客服务评价</view>
+  <view class="info-grid">
+    <view class="info-cell">
+      <text class="cell-label">总体满意度</text>
+      <text class="cell-value feedback-score">{{booking._serviceFeedback.overall}} / 5</text>
+    </view>
+    <view class="info-cell">
+      <text class="cell-label">愿意推荐</text>
+      <text class="cell-value feedback-score">{{booking._serviceFeedback.recommend}} / 5</text>
+    </view>
+    <view class="info-cell">
+      <text class="cell-label">专业程度</text>
+      <text class="cell-value">{{booking._serviceFeedback.professional}} / 5</text>
+    </view>
+    <view class="info-cell">
+      <text class="cell-label">服务细致度</text>
+      <text class="cell-value">{{booking._serviceFeedback.attentive}} / 5</text>
+    </view>
+    <view class="info-cell">
+      <text class="cell-label">态度与沟通</text>
+      <text class="cell-value">{{booking._serviceFeedback.communication}} / 5</text>
+    </view>
+    <view class="info-cell">
+      <text class="cell-label">环境舒适度</text>
+      <text class="cell-value">{{booking._serviceFeedback.environment}} / 5</text>
+    </view>
+    <view class="info-cell">
+      <text class="cell-label">流程便利度</text>
+      <text class="cell-value">{{booking._serviceFeedback.flow}} / 5</text>
+    </view>
+    <view class="info-cell">
+      <text class="cell-label">仪器舒适度</text>
+      <text class="cell-value">{{booking._serviceFeedback.device}} / 5</text>
+    </view>
+    <view class="info-cell full" wx:if="{{booking._serviceFeedback.comment}}">
+      <text class="cell-label">意见与建议</text>
+      <text class="cell-value feedback-comment">{{booking._serviceFeedback.comment}}</text>
+    </view>
+    <view class="info-cell full">
+      <text class="cell-label">评价时间</text>
+      <text class="cell-value">{{booking._serviceFeedback.submittedAtDisplay}}</text>
+    </view>
+  </view>
+</view>
+
 <!-- ===== 工作人员填写（黄色字段） ===== -->
 <!-- 仅体验中/已体验显示 -->
 <view class="section" wx:if="{{booking._status === 'in_experience' || booking._status === 'completed'}}">

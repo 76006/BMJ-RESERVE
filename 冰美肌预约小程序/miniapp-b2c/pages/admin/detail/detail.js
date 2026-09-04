@@ -68,6 +68,7 @@ Page({
       _immediateSatisfaction: 0, _comfortSatisfaction: 0,
       _photos: [], _beforePhotos: [], _beforeFrontPhotos: [], _beforeSidePhotos: [],
       _immediatePhotos: [], _day30Photos: [], _day90Photos: [],
+      _serviceFeedback: null,
       _productFeedback: '',
       _day30FollowUp: '', _day90FollowUp: '',
       _followUpRecords: []
@@ -98,6 +99,11 @@ Page({
     booking._createdAtDisplay = this._fmtTime(booking.createdAt)
     booking.consentSignTimeDisplay = booking.consentSignTime ? this._fmtTime(booking.consentSignTime) : ''
     booking._checkInDisplay = booking.checkInAt ? this._fmtTime(booking.checkInAt) : ''
+    if (booking._serviceFeedback && typeof booking._serviceFeedback === 'object') {
+      booking._serviceFeedback.submittedAtDisplay = this._fmtTime(
+        booking._serviceFeedback.updatedAt || booking._serviceFeedback.submittedAt
+      )
+    }
     booking._followUpRecordsDisplay = (booking._followUpRecords || []).map(r => ({
       ...r,
       dateDisplay: this._fmtTime(r.date)
@@ -585,13 +591,6 @@ Page({
   goCheckIn() {
     const booking = this.data.booking
     if (!booking) return
-    const nowDate = new Date()
-    const pad = value => String(value).padStart(2, '0')
-    const today = `${nowDate.getFullYear()}-${pad(nowDate.getMonth() + 1)}-${pad(nowDate.getDate())}`
-    if (booking.visitDate !== today) {
-      wx.showToast({ title: '只能在预约当天到店签到', icon: 'none' })
-      return
-    }
     const id = booking.id
     wx.navigateTo({ url: `/pages/admin/checkin/checkin?id=${id}` })
   },

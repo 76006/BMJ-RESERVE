@@ -13,7 +13,7 @@
     <view class="nf-icon">📅</view>
     <view class="nf-title">暂未自动匹配到预约</view>
     <view class="nf-desc" wx:if="{{needsPhoneAuth}}">请授权预约时使用的微信手机号，系统将自动识别并绑定您的预约</view>
-    <view class="nf-desc" wx:else>如您今日有预约，请手动选择；否则请联系工作人员协助签到</view>
+    <view class="nf-desc" wx:else>如您有已确认的预约，请手动选择；否则请联系工作人员协助签到</view>
 
     <button
       class="g-btn-primary auth-phone-btn"
@@ -24,9 +24,9 @@
       disabled="{{authorizing}}"
     >授权手机号并继续签到</button>
 
-    <!-- 手动选择今日预约 -->
+    <!-- 手动选择可签到预约 -->
     <view class="nf-list" wx:if="{{todayBookings.length > 0}}">
-      <view class="nf-list-title">选择今日预约</view>
+      <view class="nf-list-title">选择可签到预约</view>
       <view class="nf-item" wx:for="{{todayBookings}}" wx:key="id" data-id="{{item.id}}" bindtap="selectBooking">
         <view class="nf-item-main">
           <text class="nf-item-name">{{item.name}}</text>

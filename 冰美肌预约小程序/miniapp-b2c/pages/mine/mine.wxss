@@ -192,6 +192,13 @@
   margin-bottom: 4rpx;
   min-height: 68rpx;
 }
+.service-feedback-action {
+  margin: 4rpx 0 10rpx;
+  padding: 18rpx 20rpx;
+  border-radius: 14rpx;
+  background: #F5F3FF;
+  border: 1rpx solid #DDD6FE;
+}
 .booking-reminder-action {
   display: flex;
   align-items: center;

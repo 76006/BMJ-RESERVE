@@ -94,6 +94,11 @@
       <text class="shortcut-text">数据看板</text>
       <text class="shortcut-arrow">›</text>
     </view>
+    <view class="shortcut-item" bindtap="goFeedbackAdmin">
+      <text class="shortcut-icon">📝</text>
+      <text class="shortcut-text">回访问卷管理</text>
+      <text class="shortcut-arrow">›</text>
+    </view>
     <view class="shortcut-item" bindtap="goAdminSchedule">
       <text class="shortcut-icon">📅</text>
       <text class="shortcut-text">时段管理</text>
@@ -244,6 +249,20 @@
         </view>
         <!-- 已到店/已体验：护理须知和阶段照片 -->
         <view class="booking-footer" wx:elif="{{item._status === 'visited' || item._status === 'in_experience' || item._status === 'completed'}}">
+          <view class="booking-action service-feedback-action" wx:if="{{item.canServiceFeedback}}" data-id="{{item.id}}" catchtap="goServiceFeedback">
+            <text class="booking-tap-hint">{{item.hasServiceFeedback ? '查看或修改服务评价' : '评价本次服务'}} →</text>
+          </view>
+          <view
+            class="booking-action"
+            wx:for="{{item.followupQuestionnaireStages}}"
+            wx:for-item="questionnaire"
+            wx:key="mode"
+            data-id="{{item.id}}"
+            data-mode="{{questionnaire.mode}}"
+            catchtap="goFollowupFeedback"
+          >
+            <text class="booking-tap-hint">{{questionnaire.label}} →</text>
+          </view>
           <block wx:if="{{item.canAftercare}}">
             <view class="booking-action" data-id="{{item.id}}" data-modes="{{item.availableAftercares}}" catchtap="goAftercare">
               <text class="booking-tap-hint">查看护理须知 →</text>
@@ -262,7 +281,7 @@
               <text class="booking-tap-hint">{{stageItem.label}} →</text>
             </view>
           </block>
-          <text class="booking-tap-hint dim" wx:if="{{!item.canAftercare && !item.canUploadFollowupPhotos}}">照片上传时间未到</text>
+          <text class="booking-tap-hint dim" wx:if="{{!item.canServiceFeedback && !item.canAftercare && !item.canUploadFollowupPhotos}}">照片上传时间未到</text>
         </view>
         <view class="booking-reminder-action" wx:if="{{item.canSubscribeReminders}}" data-id="{{item.id}}" catchtap="subscribeBookingReminders">
           <view class="booking-reminder-copy">
