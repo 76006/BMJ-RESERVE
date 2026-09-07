@@ -1,0 +1,9 @@
+{
+  "name": "export-booking-archive",
+  "version": "1.0.0",
+  "main": "index.js",
+  "dependencies": {
+    "archiver": "^7.0.1",
+    "wx-server-sdk": "3.0.1"
+  }
+}

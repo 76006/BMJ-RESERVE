@@ -176,23 +176,5 @@ Page({
 
   goQRConfig() {
     wx.navigateTo({ url: '/pages/admin/qrconfig/qrconfig' })
-  },
-
-  onRebookTap(e) {
-    const id = e.currentTarget.dataset.id
-    wx.showModal({
-      title: "重新预约",
-      content: "将带入客户资料，请在首页重新选择日期和时段后提交",
-      confirmText: "去选择",
-      cancelText: "取消",
-      success: (res) => {
-        if (res.confirm) {
-          const app = getApp()
-          app.rebook(id, (draft) => {
-            if (draft) wx.switchTab({ url: '/pages/index/index' })
-          })
-        }
-      }
-    })
   }
 })

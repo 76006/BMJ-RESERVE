@@ -124,20 +124,7 @@ App({
 
     // 必须先确认当前微信身份，再读取任何本地缓存或预约数据。
     // 同一部手机更换微信号时，这一步会清除上一账号遗留的资料与权限。
-    this.globalData._identityReady = false
-    this.getOpenId((openid) => {
-      if (!openid) {
-        this.logoutAdmin()
-        this.globalData.bookings = []
-        console.warn('[身份隔离] 未取得当前微信身份，本次不读取本地用户数据')
-        this._markIdentityReady()
-        return
-      }
-      this._checkAdminByOpenId(() => {
-        this._markIdentityReady()
-        this._initCollections()
-      })
-    })
+    this._startIdentityBootstrap()
   },
 
   // 页面可在启动阶段等待管理员身份校验完成，避免先渲染成普通用户。
@@ -158,6 +145,50 @@ App({
     waiters.forEach(fn => {
       try { fn() } catch (err) { console.warn('[身份校验] 页面刷新失败:', err) }
     })
+  },
+
+  // 完整识别当前微信账号与管理员权限。网络短暂失败时自动重试一次，
+  // 成功前不读取预约缓存，避免把管理员先显示成普通用户或显示错误统计。
+  _startIdentityBootstrap() {
+    if (this._identityBootstrapRunning) return true
+    this._identityBootstrapRunning = true
+    this.globalData._identityReady = false
+
+    const finish = (success) => {
+      this._identityBootstrapRunning = false
+      this._identityCheckFailed = !success
+      this._markIdentityReady()
+      if (success) this._initCollections()
+    }
+
+    const loadOpenId = (retriesLeft) => {
+      this.getOpenId((openid) => {
+        if (!openid) {
+          if (retriesLeft > 0) {
+            console.warn('[身份识别] 获取微信身份失败，正在自动重试')
+            setTimeout(() => loadOpenId(retriesLeft - 1), 800)
+            return
+          }
+          this.logoutAdmin()
+          this.globalData.bookings = []
+          this.globalData._cloudReady = false
+          console.warn('[身份隔离] 未取得当前微信身份，本次不读取本地用户数据')
+          finish(false)
+          return
+        }
+        this._checkAdminByOpenId((success) => finish(success), 1)
+      })
+    }
+
+    loadOpenId(1)
+    return true
+  },
+
+  // 页面重新显示时，如果上次身份查询因网络失败而结束，立即再发起一次完整识别。
+  retryIdentityIfNeeded() {
+    if (this._identityBootstrapRunning || !this.globalData._identityReady) return true
+    if (!this._identityCheckFailed) return false
+    return this._startIdentityBootstrap()
   },
 
   // 解析扫码参数并写入全局标记（冷启动 onLaunch 与 暖启动 onShow 共用）
@@ -190,6 +221,7 @@ App({
   onShow(options) {
     // 小程序已在后台运行时，顾客扫码只会触发 onShow，需在这里重新解析 scene
     this._applyScanScene(options)
+    this.retryIdentityIfNeeded()
   },
 
   // ===========================================
@@ -282,7 +314,13 @@ App({
         })
       }
 
-      this._adminBookingsPromise = loadPage(0, []).then(data => {
+      const loadAllPages = () => loadPage(0, [])
+      this._adminBookingsPromise = loadAllPages().catch(err => {
+        const message = err && err.message ? err.message : String(err || '')
+        if (message.indexOf('无管理员权限') >= 0) throw err
+        console.warn('[云开发] 管理员数据首次读取失败，正在自动重试:', message)
+        return loadAllPages()
+      }).then(data => {
         data.sort(function(a, b) {
           var ta = a.createdAt || 0
           var tb = b.createdAt || 0
@@ -406,12 +444,16 @@ App({
       }
       self.globalData.bookings.unshift(booking)
       self._saveLocal()
-      self.saveUserProfile({
-        name: booking.name || '',
-        gender: booking.gender || '',
-        age: booking.age || '',
-        phone: booking.phone || ''
-      })
+      const ownerOpenId = booking._openid || booking._creatorOpenId || ''
+      const verifiedPhone = String(wx.getStorageSync('_userPhone') || '').trim()
+      if (ownerOpenId && ownerOpenId === self.globalData.openId && booking.phone === verifiedPhone) {
+        self.saveUserProfile({
+          name: booking.name || '',
+          gender: booking.gender || '',
+          age: booking.age || '',
+          phone: booking.phone || ''
+        })
+      }
       if (callback) callback(booking)
     }).catch(err => {
       console.warn('[云开发] 预约创建失败:', err)
@@ -683,7 +725,7 @@ App({
   // 管理员认证（服务端 OPENID 白名单）
   // ===========================================
   // 真机每次启动都由云函数重新确认；本地缓存只用于开发工具界面预览。
-  _checkAdminByOpenId(done) {
+  _checkAdminByOpenId(done, retriesLeft) {
     const sys = wx.getSystemInfoSync()
     if (sys.platform === 'devtools') {
       if (wx.getStorageSync('_isAdmin')) {
@@ -691,25 +733,36 @@ App({
         this.globalData.adminName = wx.getStorageSync('_adminName') || '\u7ba1\u7406\u5458'
         this.globalData.adminRole = normalizeAdminRole(wx.getStorageSync('_adminRole') || 'staff')
       }
-      if (done) done()
+      if (done) done(true)
       return
     }
     var self = this
     wx.cloud.callFunction({
       name: 'loginByPhone',
-      data: { action: 'check' }
+      data: { action: 'check' },
+      timeout: 15000
     }).then(function (res) {
       const result = res.result || {}
-      if (result.ok && result.isAdmin) {
+      if (!result.ok) {
+        throw new Error(result.error || '管理员身份校验失败')
+      }
+      if (result.isAdmin) {
         self._setAdminState(result)
       } else {
         self.logoutAdmin()
       }
-      if (done) done()
+      if (done) done(true)
     }).catch(function (err) {
+      if (Number(retriesLeft || 0) > 0) {
+        console.warn('[管理员] 云端身份校验失败，正在自动重试:', err && err.message ? err.message : err)
+        setTimeout(function () {
+          self._checkAdminByOpenId(done, Number(retriesLeft || 0) - 1)
+        }, 800)
+        return
+      }
       self.logoutAdmin()
       console.warn('[管理员] 云端身份校验失败:', err && err.message ? err.message : err)
-      if (done) done()
+      if (done) done(false)
     })
   },
 
@@ -725,6 +778,17 @@ App({
     wx.setStorageSync('_adminRole', this.globalData.adminRole)
     wx.setStorageSync('_adminPhone', admin.phone || '')
     console.log('[管理员] 云端身份已确认:', this.globalData.adminRole)
+
+    // 管理员旧版本可能保存过代预约客户的本地画像。没有本人授权手机号，
+    // 或画像手机号与本人授权号码不一致时直接清掉，避免“用户视角”冒充客户。
+    const verifiedPhone = !!wx.getStorageSync('_phoneVerified')
+      ? String(wx.getStorageSync('_userPhone') || '').trim()
+      : ''
+    const profile = wx.getStorageSync('userProfile') || null
+    if (profile && (!verifiedPhone || profile.phone !== verifiedPhone)) {
+      wx.removeStorageSync('userProfile')
+      console.warn('[用户资料] 已清除管理员账号中的旧客户资料')
+    }
 
     // 新认证的管理员：重新加载全部预约（之前只加载了自己的）
     if (!wasAdmin && this.globalData._cloudReady) {
@@ -770,6 +834,7 @@ App({
     wx.setStorageSync('userProfile', {
       name: profile.name || '',
       gender: profile.gender || '',
+      age: profile.age || '',
       phone: profile.phone || '',
       updatedAt: new Date().toISOString()
     })
@@ -908,7 +973,7 @@ App({
   updateCustomerFields(bookingId, data) {
     const booking = this._find(bookingId)
     if (!booking) return Promise.reject(new Error('预约记录不存在'))
-    const grayFields = ['name', 'gender', 'age', 'idCard', 'phone']
+    const grayFields = ['name', 'gender', 'age', 'idCard']
     const cloudData = {}
     grayFields.forEach(key => {
       if (data[key] !== undefined && data[key] !== null) {
@@ -982,6 +1047,18 @@ App({
     wx.setStorageSync('_activeOpenId', openid)
     wx.setStorageSync('_identityIsolationVersion', 1)
     this.globalData.openId = openid
+
+    // 修复旧版本“管理员代客预约”可能留下的客户资料串写。
+    // 已授权手机号是当前微信账号的权威身份；画像手机号不一致时丢弃姓名等旧资料。
+    const verifiedPhone = String(wx.getStorageSync('_userPhone') || '').trim()
+    const profile = wx.getStorageSync('userProfile') || null
+    if (verifiedPhone && profile && profile.phone && profile.phone !== verifiedPhone) {
+      wx.setStorageSync('userProfile', {
+        phone: verifiedPhone,
+        updatedAt: new Date().toISOString()
+      })
+      console.warn('[用户资料] 已清除与当前授权手机号不一致的旧资料')
+    }
   },
 
   getOpenId(callback) {
@@ -1062,7 +1139,7 @@ App({
       .filter(b => {
         // 用户视角始终只显示本人预约；管理员查看全部记录只能走管理页面。
         if (myOpenId) {
-          // _openid 是当前预约归属；操作师代预约后，顾客签到会把它绑定到顾客微信。
+          // _openid 是当前预约归属；新预约始终绑定提交预约的本人微信。
           const ownerOpenId = b._openid || b._creatorOpenId || ''
           if (ownerOpenId) return ownerOpenId === myOpenId
 
@@ -1162,7 +1239,7 @@ App({
   // ===========================================
   // 导出CSV（含全部字段）
   // ===========================================
-  exportCSV() {
+  exportCSV(sourceBookings) {
     const headers = [
       'ID', '姓名', '性别', '年龄', '身份证号', '体验日期', '时间段', '过往美容护理经历', '重点改善需求', '手机号',
       '来源渠道', '培训师', '状态', '确认人', '签到时间', '设备型号',
@@ -1172,15 +1249,15 @@ App({
     ]
     const statusLabel = s => STATUS_MAP[s] ? STATUS_MAP[s].admin : s
     const channelLabel = c => CHANNEL_MAP[c] || c || ''
-    const esc = v => { const s = String(v || ''); return s.includes(',') || s.includes('"') || s.includes('\n') ? '"' + s.replace(/"/g, '""') + '"' : s }
-    const rows = this.globalData.bookings.map(b => [
-      b.id, b.name, b.gender, b.age, b.idCard || '', b.visitDate, b.visitTime || '',
-      esc(b.medicalHistory), esc(b.needs), b.phone,
+    const bookings = Array.isArray(sourceBookings) ? sourceBookings : this.globalData.bookings
+    const rows = bookings.map(b => [
+      b.id || b._id, b.name, b.gender, b.age, b.idCard || '', b.visitDate, b.visitTime || '',
+      b.medicalHistory || '', b.needs || '', b.phone,
       channelLabel(b.channel), b.trainerName || '',
       statusLabel(b._status), b._confirmedBy || '', b.checkInAt || '', b.deviceModel || '',
       b._clientManager, b._totalEnergy, b._shotDistribution, b._maxLevel,
-      esc(b._productFeedback), esc(b._day30FollowUp), esc(b._day90FollowUp),
-      esc(b._adminNote),
+      b._productFeedback || '', b._day30FollowUp || '', b._day90FollowUp || '',
+      b._adminNote || '',
       b.consentSignName || '', b.consentSignTime || '', b.createdAt, b.updatedAt
     ])
     return { headers, rows }

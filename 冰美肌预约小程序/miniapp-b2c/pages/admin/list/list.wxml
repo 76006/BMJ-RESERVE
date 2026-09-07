@@ -84,9 +84,5 @@
     <view class="card-reject-bar" wx:if="{{item._status === 'pending_confirm'}}" catchtap="onRejectTap" data-id="{{item.id}}">
       <text class="reject-btn-text">✕ 拒绝该预约</text>
     </view>
-    <!-- 重新预约（已取消状态显示） -->
-    <view class="card-rebook-bar" wx:if="{{item._status === 'cancelled'}}" catchtap="onRebookTap" data-id="{{item.id}}">
-      <text class="rebook-btn-text">🔄 重新预约</text>
-    </view>
   </view>
 </view>

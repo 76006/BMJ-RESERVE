@@ -1,27 +1,55 @@
-<!-- 数据预览表格 -->
-<nav-bar title="数据预览" showBack="{{true}}"></nav-bar>
+<nav-bar title="数据导出" showBack="{{true}}"></nav-bar>
 
 <view class="page">
+  <view class="filter-card">
+    <view class="filter-title">选择预约日期范围</view>
+    <view class="date-row {{allDates ? 'date-row-disabled' : ''}}">
+      <picker class="date-picker" mode="date" value="{{startDate}}" end="{{today}}" bindchange="onStartDateChange">
+        <view class="date-box">
+          <text class="date-label">开始日期</text>
+          <text class="date-value">{{startDate}}</text>
+        </view>
+      </picker>
+      <text class="date-separator">至</text>
+      <picker class="date-picker" mode="date" value="{{endDate}}" end="{{today}}" bindchange="onEndDateChange">
+        <view class="date-box">
+          <text class="date-label">结束日期</text>
+          <text class="date-value">{{endDate}}</text>
+        </view>
+      </picker>
+    </view>
+    <view class="quick-ranges">
+      <view class="range-chip {{rangePreset === 'month' ? 'range-chip-active' : ''}}" bindtap="useCurrentMonth">本月</view>
+      <view class="range-chip {{rangePreset === 'all' ? 'range-chip-active' : ''}}" bindtap="useAllDates">全部日期</view>
+    </view>
+    <view class="range-summary">当前范围：{{rangeLabel}} · {{total}} 位客户</view>
+  </view>
 
-  <!-- 工具栏 -->
-  <view class="toolbar">
-    <view class="toolbar-info">共 {{total}} 条记录</view>
-    <view class="toolbar-actions">
-      <view class="toolbar-btn" bindtap="copyAll">
-        <text class="btn-icon">📋</text>
-        <text>复制全部</text>
+  <view class="export-actions">
+    <view class="export-btn table-btn {{exportingTable || exportingArchive ? 'export-btn-disabled' : ''}}" bindtap="exportTable">
+      <text class="export-icon">📄</text>
+      <view class="export-copy">
+        <text class="export-title">{{exportingTable ? '正在生成表格…' : (tableReady ? '发送已生成表格' : '导出表格')}}</text>
+        <text class="export-desc">{{tableReady ? '点击后选择文件传输助手' : '客户文字资料，Excel可直接打开'}}</text>
       </view>
-      <view class="toolbar-btn" bindtap="shareScreenshot">
-        <text class="btn-icon">📸</text>
-        <text>截图分享</text>
+    </view>
+    <view class="export-btn archive-btn {{exportingTable || exportingArchive ? 'export-btn-disabled' : ''}}" bindtap="exportPhotoArchive">
+      <text class="export-icon">🗂️</text>
+      <view class="export-copy">
+        <text class="export-title">{{exportingArchive ? '正在整理照片…' : (archiveReady ? '发送已生成资料包' : '导出含照片资料包')}}</text>
+        <text class="export-desc">{{archiveReady ? '点击后选择文件传输助手' : '表格和原图按客户、阶段、角度整理为ZIP'}}</text>
       </view>
     </view>
   </view>
 
-  <!-- 横向滚动表格 -->
-  <scroll-view scroll-x class="table-wrap" enhanced show-scrollbar>
+  <view class="export-tip">第一次点击生成文件；生成完成后请再次点击同一个按钮发送，并选择“文件传输助手”。照片较多时建议缩小日期范围分批导出。</view>
+
+  <view class="table-heading">
+    <text>数据预览</text>
+    <text class="table-count">{{total}} / {{allTotal}} 条</text>
+  </view>
+  <scroll-view scroll-x class="table-wrap" enhanced show-scrollbar wx:if="{{rows.length > 0}}">
     <view class="table">
-      <!-- 表头 -->
       <view class="thead">
         <view class="th" style="width:120rpx">序号</view>
         <view class="th" style="width:160rpx">姓名</view>
@@ -29,16 +57,14 @@
         <view class="th" style="width:100rpx">年龄</view>
         <view class="th" style="width:220rpx">电话</view>
         <view class="th" style="width:220rpx">预约日期</view>
-        <view class="th" style="width:160rpx">预约时间</view>
-        <view class="th" style="width:220rpx">改善需求</view>
+        <view class="th" style="width:180rpx">预约时间</view>
+        <view class="th" style="width:240rpx">改善需求</view>
         <view class="th" style="width:160rpx">状态</view>
         <view class="th" style="width:160rpx">来源</view>
         <view class="th" style="width:200rpx">负责人</view>
         <view class="th" style="width:300rpx">内部备注</view>
-        <view class="th" style="width:220rpx">提交时间</view>
+        <view class="th" style="width:240rpx">提交时间</view>
       </view>
-
-      <!-- 表体 -->
       <view class="tbody">
         <view class="tr" wx:for="{{rows}}" wx:key="id">
           <view class="td" style="width:120rpx">{{index + 1}}</view>
@@ -47,24 +73,20 @@
           <view class="td" style="width:100rpx">{{item.age}}</view>
           <view class="td" style="width:220rpx">{{item.phone}}</view>
           <view class="td" style="width:220rpx">{{item.visitDate}}</view>
-          <view class="td" style="width:160rpx">{{item.visitTime}}</view>
-          <view class="td" style="width:220rpx">{{item.needs}}</view>
-          <view class="td" style="width:160rpx">
-            <view class="status-tag status-{{item._status}}">{{item.statusLabel}}</view>
-          </view>
+          <view class="td" style="width:180rpx">{{item.visitTime}}</view>
+          <view class="td" style="width:240rpx">{{item.needs}}</view>
+          <view class="td" style="width:160rpx"><view class="status-tag status-{{item._status}}">{{item.statusLabel}}</view></view>
           <view class="td" style="width:160rpx">{{item.channelLabel}}</view>
           <view class="td" style="width:200rpx">{{item._clientManager || '-'}}</view>
           <view class="td" style="width:300rpx">{{item._adminNote || '-'}}</view>
-          <view class="td" style="width:220rpx">{{item.createdAtStr}}</view>
+          <view class="td" style="width:240rpx">{{item.createdAtStr}}</view>
         </view>
       </view>
     </view>
   </scroll-view>
 
-  <!-- 空状态 -->
   <view class="empty" wx:if="{{rows.length === 0}}">
     <text class="empty-icon">📭</text>
-    <text class="empty-text">暂无数据</text>
+    <text class="empty-text">当前日期范围暂无数据</text>
   </view>
-
 </view>

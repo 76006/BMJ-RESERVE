@@ -1,3 +1,5 @@
+const exportFile = require('../../../utils/export-file')
+
 function deleteCloudFile(fileID) {
   if (!fileID) return
   wx.cloud.deleteFile({ fileList: [fileID] }).catch(err => {
@@ -22,6 +24,8 @@ Page({
     photoGroups: [],
     staffNotify: null,
     followupReminderIssues: [],
+    exportingArchive: false,
+    archiveReady: false,
     // 二维码
     showQRModal: false,
     qrCodeUrl: '',
@@ -470,6 +474,77 @@ Page({
     })
   },
 
+  exportCustomerArchive() {
+    const booking = this.data.booking
+    if (!booking || this.data.exportingArchive) return
+    if (this._readyCustomerArchiveFile) {
+      this.sendPreparedCustomerArchive()
+      return
+    }
+    let archiveResult = null
+    this.setData({ exportingArchive: true })
+    wx.showLoading({ title: '整理资料中', mask: true })
+    wx.cloud.callFunction({
+      name: 'exportBookingArchive',
+      data: { action: 'create', bookingId: booking.id || booking._id }
+    }).then(res => {
+      archiveResult = res.result || {}
+      if (!archiveResult.success || !archiveResult.fileID) {
+        throw new Error(archiveResult.error || '客户资料包生成失败')
+      }
+      wx.showLoading({ title: '下载资料中', mask: true })
+      return exportFile.downloadCloudFile(archiveResult.fileID, archiveResult.fileName)
+    }).then(file => {
+      this.cleanupExportArchive(archiveResult.fileID)
+      wx.hideLoading()
+      this._readyCustomerArchiveFile = file
+      this._readyCustomerArchiveSummary = archiveResult
+      this.setData({ archiveReady: true })
+      wx.showModal({
+        title: '客户资料已生成',
+        content: '请再次点击“发送该客户资料包”，然后选择文件传输助手。',
+        showCancel: false
+      })
+    }).catch(err => {
+      wx.hideLoading()
+      if (archiveResult && archiveResult.fileID) this.cleanupExportArchive(archiveResult.fileID)
+      if (!exportFile.isCancelled(err)) {
+        wx.showModal({ title: '导出失败', content: exportFile.friendlyError(err, '客户资料包导出失败，请重试'), showCancel: false })
+      }
+    }).finally(() => this.setData({ exportingArchive: false }))
+  },
+
+  sendPreparedCustomerArchive() {
+    const file = this._readyCustomerArchiveFile
+    const summary = this._readyCustomerArchiveSummary || {}
+    if (!file) return
+    // 必须由用户的这次点击直接调用，微信才允许发送文件。
+    exportFile.shareFile(file.filePath, file.fileName)
+      .then(() => {
+        const failedText = summary.failedPhotoCount
+          ? `，${summary.failedPhotoCount}张照片未能读取，详情见资料包内说明`
+          : ''
+        wx.showModal({
+          title: '客户资料已发送',
+          content: `资料包包含客户表格和${summary.photoCount || 0}张照片${failedText}`,
+          showCancel: false
+        })
+      })
+      .catch(err => {
+        if (!exportFile.isCancelled(err)) {
+          wx.showModal({ title: '发送失败', content: exportFile.friendlyError(err, '客户资料包发送失败，请重试'), showCancel: false })
+        }
+      })
+  },
+
+  cleanupExportArchive(fileID) {
+    if (!fileID) return
+    wx.cloud.callFunction({
+      name: 'exportBookingArchive',
+      data: { action: 'cleanup', fileID }
+    }).catch(err => console.warn('[客户资料导出] 临时压缩包清理失败:', err))
+  },
+
   // ===== 拨号 =====
   callPhone() {
     if (this.data.booking && this.data.booking.phone) {
@@ -593,24 +668,6 @@ Page({
     if (!booking) return
     const id = booking.id
     wx.navigateTo({ url: `/pages/admin/checkin/checkin?id=${id}` })
-  },
-
-  rebook() {
-    const id = this.data.booking.id
-    wx.showModal({
-      title: '重新预约',
-      content: '将带入客户资料，请在首页重新选择日期和时段后提交',
-      confirmText: '去选择',
-      cancelText: '取消',
-      success: (res) => {
-        if (res.confirm) {
-          const app = getApp()
-          app.rebook(id, (draft) => {
-            if (draft) wx.switchTab({ url: '/pages/index/index' })
-          })
-        }
-      }
-    })
   },
 
   // ===== 签到二维码 =====

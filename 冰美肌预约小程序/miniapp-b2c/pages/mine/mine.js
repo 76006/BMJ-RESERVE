@@ -60,7 +60,10 @@ Page({
 
     // OPENID 返回并不代表管理员权限已经查询完成。页面必须等待完整身份校验，
     // 否则首次进入“我的”会先被渲染成普通用户，且之后不会自动切换。
-    if (!app.globalData._identityReady) {
+    const waitingForIdentity = app.retryIdentityIfNeeded
+      ? app.retryIdentityIfNeeded()
+      : !app.globalData._identityReady
+    if (waitingForIdentity || !app.globalData._identityReady) {
       this.setData({ identityLoading: true })
       if (this._waitingIdentity) return
       this._waitingIdentity = true

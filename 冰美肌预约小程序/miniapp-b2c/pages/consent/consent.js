@@ -165,8 +165,7 @@ Page({
         name: this.data.bookingData.name,
         gender: this.data.bookingData.gender,
         age: this.data.bookingData.age,
-        idCard: this.data.bookingData.idCard,
-        phone: this.data.bookingData.phone
+        idCard: this.data.bookingData.idCard
       })
         .then(() => app.saveConsent(this.data.bookingId, {
           name: signName,

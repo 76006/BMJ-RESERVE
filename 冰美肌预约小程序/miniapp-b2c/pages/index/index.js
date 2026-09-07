@@ -75,7 +75,34 @@ Page({
     this.setData({ minVisitDate: today })
     // 暖启动：小程序已在后台时扫码只触发 onShow，需在这里也检查跳转
     const redirectingToCheckin = this._checkCheckinRedirect()
-    if (!redirectingToCheckin) this._loadRebookDraft()
+    if (!redirectingToCheckin) this._syncAuthorizedBookingUser()
+  },
+
+  // 只有确认了当前微信身份后，才恢复这个账号已经授权过的手机号。
+  // 这样返回小程序无需重复授权，同时不会短暂显示上一微信账号的资料。
+  _syncAuthorizedBookingUser() {
+    const app = getApp()
+    const apply = () => {
+      this._waitingIdentity = false
+      const phone = String(wx.getStorageSync('_userPhone') || '').trim()
+      const phoneVerified = !!app.globalData.openId &&
+        !!wx.getStorageSync('_phoneVerified') &&
+        /^1[3-9]\d{9}$/.test(phone)
+
+      if (this._loadRebookDraft(phone, phoneVerified)) return
+      this.setData({
+        phone: phoneVerified ? phone : '',
+        phoneVerified
+      })
+    }
+
+    if (!app.globalData._identityReady && app.whenIdentityReady) {
+      if (this._waitingIdentity) return
+      this._waitingIdentity = true
+      app.whenIdentityReady(apply)
+      return
+    }
+    apply()
   },
 
   // 门店签到码扫描后跳转顾客签到页（onLoad 与 onShow 共用）
@@ -94,17 +121,22 @@ Page({
   },
 
   // 重新预约只带入客户资料，日期与时段必须由用户重新选择并再次提交。
-  _loadRebookDraft() {
+  _loadRebookDraft(verifiedPhone, phoneVerified) {
     const draft = wx.getStorageSync('_rebookDraft')
-    if (!draft) return
+    if (!draft) return false
     wx.removeStorageSync('_rebookDraft')
 
-    const app = getApp()
-    const profile = app.getUserProfile ? (app.getUserProfile() || {}) : {}
-    const verifiedPhone = profile.phone || wx.getStorageSync('_userPhone') || ''
-    const isPhoneVerified = !!app.globalData.isAdmin || (
-      !!wx.getStorageSync('_phoneVerified') && verifiedPhone === (draft.phone || '')
-    )
+    // 重新预约只允许预约本人；管理员从旧入口带入的其他客户资料一律丢弃。
+    if (!phoneVerified || verifiedPhone !== String(draft.phone || '').trim()) {
+      this._rebookSource = null
+      this.setData({
+        phone: phoneVerified ? verifiedPhone : '',
+        phoneVerified
+      })
+      wx.showToast({ title: '只能为本人预约，请由客户本人微信操作', icon: 'none', duration: 2600 })
+      return true
+    }
+
     const genderIdx = Math.max(0, genderOptions.indexOf(draft.gender || '男'))
     this._rebookSource = {
       channel: draft.channel || 'direct',
@@ -118,8 +150,8 @@ Page({
       genderText: genderOptions[genderIdx],
       age: draft.age || '',
       idCard: draft.idCard || '',
-      phone: draft.phone || '',
-      phoneVerified: isPhoneVerified,
+      phone: verifiedPhone,
+      phoneVerified: true,
       medicalHistory: draft.medicalHistory || '',
       needs: draft.needs || '',
       visitDate: '',
@@ -134,6 +166,7 @@ Page({
     })
     wx.showToast({ title: '资料已带入，请重新选择日期和时段', icon: 'none', duration: 2200 })
     setTimeout(() => wx.pageScrollTo({ selector: '#book', duration: 300 }), 100)
+    return true
   },
 
   scrollToBook() {
@@ -383,19 +416,6 @@ Page({
         wx.switchTab({ url: '/pages/mine/mine' })
       }, 1200)
     }
-    const app = getApp()
-    const isBookingForAnotherCustomer = app.globalData.isAdmin &&
-      booking && booking._openid !== app.globalData.openId
-    if (isBookingForAnotherCustomer) {
-      wx.showModal({
-        title: '代预约已提交',
-        content: '客户使用本人微信授权预约手机号后，这条预约会自动绑定到客户账号。',
-        showCancel: false,
-        success: finish,
-        fail: finish
-      })
-      return
-    }
     wx.showModal({
       title: '预约成功',
       content: '允许通知后，您可收到预约结果，以及体验后30天、90天的照片上传提醒。',
@@ -430,11 +450,16 @@ Page({
 
   resetForm() {
     this._rebookSource = null
+    const app = getApp()
+    const phone = String(wx.getStorageSync('_userPhone') || '').trim()
+    const phoneVerified = !!app.globalData.openId &&
+      !!wx.getStorageSync('_phoneVerified') &&
+      /^1[3-9]\d{9}$/.test(phone)
     this.setData({
       name: '', genderIdx: 0, genderText: '男', age: '', idCard: '',
       visitDate: '', visitTimeIdx: -1, visitTimeText: '',
-      medicalHistory: '', needs: '', phone: '',
-      phoneVerified: false, agreedPrivacy: false
+      medicalHistory: '', needs: '', phone: phoneVerified ? phone : '',
+      phoneVerified, agreedPrivacy: false
     })
   },
 

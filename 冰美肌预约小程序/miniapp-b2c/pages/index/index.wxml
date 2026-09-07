@@ -111,8 +111,8 @@
     <!-- 微信授权 — 全宽主按钮，权重最高 -->
     <button class="method-auth-btn" open-type="getPhoneNumber" bindgetphonenumber="onGetPhoneNumber">
       <text class="method-auth-icon">📱</text>
-      <text class="method-auth-main">微信授权手机号</text>
-      <text class="method-auth-hint">（推荐）</text>
+      <text class="method-auth-main">授权本人微信手机号</text>
+      <text class="method-auth-hint">（预约必需）</text>
     </button>
     </block>
   </view>

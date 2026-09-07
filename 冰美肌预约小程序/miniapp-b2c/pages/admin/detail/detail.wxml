@@ -11,6 +11,14 @@
     </view>
   </view>
 
+  <view class="customer-export-btn {{exportingArchive ? 'customer-export-btn-disabled' : ''}}" bindtap="exportCustomerArchive">
+    <text class="customer-export-icon">🗂️</text>
+    <view class="customer-export-copy">
+      <text class="customer-export-title">{{exportingArchive ? '正在整理客户资料…' : (archiveReady ? '发送该客户资料包' : '导出该客户资料包')}}</text>
+      <text class="customer-export-desc">{{archiveReady ? '点击后选择文件传输助手' : '包含客户表格及已上传的全部阶段原图'}}</text>
+    </view>
+  </view>
+
 
   <!-- 状态 -->
   <view class="action-row">
@@ -51,12 +59,6 @@
   <view class="qrcode-gen-bar" wx:if="{{booking._status === 'confirmed'}}" bindtap="genQRCode">
     <text class="qrcode-gen-text">📱 生成签到二维码</text>
     <text class="qrcode-gen-arrow">›</text>
-  </view>
-
-  <!-- 重新预约（已取消状态显示） -->
-  <view class="rebook-bar" wx:if="{{booking._status === 'cancelled'}}" bindtap="rebook">
-    <text class="rebook-bar-text">🔄 重新预约</text>
-    <text class="rebook-bar-arrow">›</text>
   </view>
 
   <!-- 设备信息（已签到后显示） -->

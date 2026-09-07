@@ -24,7 +24,7 @@ const ADMIN_FIELDS = new Set([
   '_status', '_confirmedAt', '_confirmedBy', '_rejectReason', '_cancelReason',
   'checkInAt', 'deviceModel', 'consentSignName', 'consentSignTime',
   'consentSignImage', 'consentPhotoAuth1', 'consentPhotoAuth2',
-  'name', 'gender', 'age', 'idCard', 'phone', '_adminNote', '_followUpRecords',
+  'name', 'gender', 'age', 'idCard', '_adminNote', '_followUpRecords',
   '_clientManager', '_totalEnergy', '_shotDistribution', '_maxLevel',
   '_immediateSatisfaction', '_comfortSatisfaction', '_productFeedback',
   '_day30FollowUp', '_day90FollowUp', '_photos',
@@ -34,7 +34,7 @@ const ADMIN_FIELDS = new Set([
 
 const USER_FIELDS = new Set([
   '_status', '_cancelReason',
-  'name', 'gender', 'age', 'idCard', 'phone',
+  'name', 'gender', 'age', 'idCard',
   'updatedAt'
 ])
 
@@ -148,18 +148,6 @@ async function getCurrentStoreConfig() {
     }
     throw err
   }
-}
-
-async function resolveBookingOwner(openId, phone, admin) {
-  if (!admin) return openId
-  const res = await db.collection('users')
-    .where({ phone, phoneVerified: true })
-    .limit(1)
-    .get()
-  const linked = res.data && res.data[0]
-  // 操作师代客预约时，如果客户尚未授权过手机号，先保持客户归属为空。
-  // 不能把操作师的 openId 当成客户，否则客户看不到预约、通知也会发错人。
-  return linked && linked.openId ? linked.openId : ''
 }
 
 // 新预约写入成功后通知企业微信内部群。Webhook 只从云函数环境变量读取，绝不写入代码。
@@ -297,16 +285,15 @@ async function createBooking(openId, event) {
     return { success: false, error: '请先阅读并同意隐私协议' }
   }
 
-  const admin = await getAdmin(openId)
   const verifiedPhone = await getVerifiedPhone(openId)
   const requestedPhone = cleanText(input.phone, 20)
-  const phone = admin ? requestedPhone : verifiedPhone
-  if (!/^1[3-9]\d{9}$/.test(phone)) {
-    return { success: false, error: admin ? '客户手机号格式不正确' : '请重新授权微信手机号' }
+  if (!/^1[3-9]\d{9}$/.test(verifiedPhone)) {
+    return { success: false, error: '请先授权当前微信手机号' }
   }
-  if (!admin && requestedPhone && requestedPhone !== verifiedPhone) {
+  if (requestedPhone && requestedPhone !== verifiedPhone) {
     return { success: false, error: '预约手机号必须与微信授权号码一致' }
   }
+  const phone = verifiedPhone
 
   const name = cleanText(input.name, 40)
   const gender = cleanText(input.gender, 10)
@@ -334,7 +321,6 @@ async function createBooking(openId, event) {
     return { success: false, occupied: true, error: '该时段已被预约，请另选时间' }
   }
 
-  const ownerOpenId = await resolveBookingOwner(openId, phone, admin)
   const store = await getCurrentStoreConfig()
   const bookingId = Date.now().toString(36) + crypto.randomBytes(3).toString('hex')
   const bookingDocId = 'booking_' + bookingId
@@ -366,8 +352,8 @@ async function createBooking(openId, event) {
     consentSignImage: '',
     createdAt: now,
     updatedAt: now,
-    _openid: ownerOpenId,
-    _creatorOpenId: ownerOpenId,
+    _openid: openId,
+    _creatorOpenId: openId,
     _createdByOpenId: openId,
     _status: 'pending_confirm',
     _confirmedAt: '',
@@ -1075,9 +1061,6 @@ async function updateBooking(openId, event) {
     const phoneOwner = verifiedPhone && verifiedPhone === booking.phone
     if (!owner && !phoneOwner) return { success: false, error: '无权修改该预约' }
     data = pickFields(event.data, USER_FIELDS)
-    if (data.phone && verifiedPhone && data.phone !== verifiedPhone) {
-      return { success: false, error: '手机号必须与微信授权号码一致' }
-    }
     if (Object.prototype.hasOwnProperty.call(data, '_status')) {
       const userStatuses = booking._status === 'confirmed'
         ? ['cancelled']
