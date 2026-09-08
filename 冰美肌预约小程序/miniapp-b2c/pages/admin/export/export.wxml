@@ -4,14 +4,14 @@
   <view class="filter-card">
     <view class="filter-title">选择预约日期范围</view>
     <view class="date-row {{allDates ? 'date-row-disabled' : ''}}">
-      <picker class="date-picker" mode="date" value="{{startDate}}" end="{{today}}" bindchange="onStartDateChange">
+      <picker class="date-picker" mode="date" value="{{startDate}}" end="{{maxDate}}" bindchange="onStartDateChange">
         <view class="date-box">
           <text class="date-label">开始日期</text>
           <text class="date-value">{{startDate}}</text>
         </view>
       </picker>
       <text class="date-separator">至</text>
-      <picker class="date-picker" mode="date" value="{{endDate}}" end="{{today}}" bindchange="onEndDateChange">
+      <picker class="date-picker" mode="date" value="{{endDate}}" end="{{maxDate}}" bindchange="onEndDateChange">
         <view class="date-box">
           <text class="date-label">结束日期</text>
           <text class="date-value">{{endDate}}</text>

@@ -179,7 +179,7 @@
 
       <!-- 签署行 -->
       <view class="sign-line">
-        <text class="sign-text">签署人：{{bookingData.name || '________________'}}    签署日期：{{bookingData.visitDate || '________________'}}</text>
+        <text class="sign-text">签署人：{{bookingData.name || '________________'}}    签署日期：{{signDate || '________________'}}</text>
       </view>
 
     </scroll-view>
@@ -193,9 +193,33 @@
       <text class="scroll-hint-text">↓ 请下滑浏览全文至底部</text>
     </view>
 
+    <view class="signature-panel" wx:if="{{allRead}}">
+      <view class="signature-header">
+        <view>
+          <text class="signature-title">请在下方手写签名</text>
+          <text class="signature-subtitle">签署人：{{bookingData.name}}</text>
+        </view>
+        <view class="signature-clear" bindtap="clearSignature">清除重签</view>
+      </view>
+      <canvas
+        class="signature-canvas"
+        canvas-id="consentSignatureCanvas"
+        id="consentSignatureCanvas"
+        width="{{signatureCanvasWidth}}"
+        height="{{signatureCanvasHeight}}"
+        style="width: {{signatureCanvasWidth}}px; height: {{signatureCanvasHeight}}px;"
+        disable-scroll="true"
+        bindtouchstart="onSignatureStart"
+        catchtouchmove="onSignatureMove"
+        bindtouchend="onSignatureEnd"
+        bindtouchcancel="onSignatureEnd"
+      ></canvas>
+      <text class="signature-placeholder" wx:if="{{!signatureHasInk}}">请用手指在框内签名</text>
+    </view>
+
     <!-- 按钮 -->
     <view class="actions">
-      <view class="btn-confirm {{allRead ? '' : 'disabled'}}" bindtap="confirmConsent">确认签署</view>
+      <view class="btn-confirm {{allRead && signatureHasInk ? '' : 'disabled'}}" bindtap="confirmConsent">确认签署</view>
     </view>
 
     <!-- 护理须知入口 -->

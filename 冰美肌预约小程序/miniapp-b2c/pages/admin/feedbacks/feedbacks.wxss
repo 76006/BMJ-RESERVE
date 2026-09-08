@@ -25,6 +25,7 @@
 .reminder-text { max-width: 470rpx; }
 .fb-note { margin-top: 12rpx; padding: 14rpx 16rpx; border-radius: 10rpx; background: #FFFBEB; color: #92400E; font-size: 23rpx; line-height: 1.55; }
 .fb-note.customer { background: #F5F3FF; color: #5B21B6; }
+.fb-detail-hint { margin-top: 16rpx; text-align: right; color: var(--brand-blue); font-size: 23rpx; }
 .empty-state { text-align: center; padding: 100rpx 20rpx; }
 .empty-text { display: block; font-size: 30rpx; color: var(--text-secondary); font-weight: bold; }
 .empty-hint { display: block; font-size: 24rpx; color: var(--mid-gray); margin-top: 12rpx; }

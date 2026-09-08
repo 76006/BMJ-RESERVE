@@ -63,6 +63,7 @@
 .status-completed { background: var(--gray-100); color: var(--text-secondary); }
 .status-cancelled { background: var(--red-bg); color: var(--red-dark); }
 .status-rejected { background: var(--red-bg); color: var(--red-dark); }
+.status-expired { background: #F3F4F6; color: #6B7280; }
 
 /* 快捷确认条 */
 .quick-confirm-bar {
@@ -110,6 +111,41 @@
 }
 .rebook-bar-text { font-size: 26rpx; color: #92400E; font-weight: 600; }
 .rebook-bar-arrow { font-size: 28rpx; color: #92400E; }
+
+.consent-signature-image {
+  display: block;
+  width: 100%;
+  height: 240rpx;
+  margin-top: 12rpx;
+  border-radius: 12rpx;
+  border: 1rpx solid #D8DEE8;
+  background: #FFF;
+}
+.signature-missing { color: #9CA3AF; }
+
+.delete-booking-section {
+  margin: 8rpx 24rpx 40rpx;
+  padding: 24rpx;
+  border-radius: 16rpx;
+  background: #FFF7F7;
+  border: 1rpx solid #FECACA;
+  text-align: center;
+}
+.delete-booking-btn {
+  padding: 18rpx 24rpx;
+  border-radius: 12rpx;
+  background: #FEE2E2;
+  color: #B91C1C;
+  font-size: 27rpx;
+  font-weight: 700;
+}
+.delete-booking-hint {
+  display: block;
+  margin-top: 14rpx;
+  color: #9F5555;
+  font-size: 22rpx;
+  line-height: 1.5;
+}
 
 /* 设备信息条 */
 .device-info-bar {

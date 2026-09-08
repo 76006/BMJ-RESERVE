@@ -29,7 +29,9 @@ function fmtArrival(b) {
 
 function buildData(b, status, storeConfig) {
   const ok = status === 'confirmed'
-  const notice = b.storeAppointmentNotice || storeConfig.appointmentNotice || '请提前10分钟到店，素颜更佳'
+  const notice = ok
+    ? (b.storeAppointmentNotice || storeConfig.appointmentNotice || '请提前10分钟到店，素颜更佳')
+    : (b._rejectReason ? `未通过：${b._rejectReason}` : '预约未通过，如有疑问请联系门店')
   const address = b.storeAddress || storeConfig.address || '请联系门店确认地址'
   return {
     thing3:   { value: clip(notice, 20) },                       // 注意事项

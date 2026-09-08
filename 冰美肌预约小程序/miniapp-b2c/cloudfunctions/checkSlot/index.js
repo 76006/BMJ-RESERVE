@@ -33,7 +33,7 @@ exports.main = async (event) => {
   try {
     const where = {
       visitDate,
-      _status: _.nin(['cancelled', 'no_show', 'rejected'])
+      _status: _.nin(['cancelled', 'no_show', 'rejected', 'completed', 'expired'])
     }
     if (visitTime) where.visitTime = visitTime
 

@@ -5,7 +5,8 @@ const STATUS_CN = {
   in_experience: '体验中',
   completed: '已体验',
   cancelled: '已取消',
-  rejected: '预约失败'
+  rejected: '预约失败',
+  expired: '已过期'
 }
 
 const SUBSCRIBE_TEMPLATES = {
@@ -378,6 +379,41 @@ Page({
       fail: err => {
         console.warn('[订阅消息] 用户补充授权失败:', err)
         wx.showToast({ title: '提醒授权未完成', icon: 'none' })
+      }
+    })
+  },
+
+  cancelOwnBooking(e) {
+    const id = e.currentTarget.dataset.id
+    const booking = (this.data.bookings || []).find(item => item.id === id)
+    if (!booking || (booking._status !== 'pending_confirm' && booking._status !== 'confirmed')) {
+      wx.showToast({ title: '当前预约不能取消', icon: 'none' })
+      return
+    }
+    if (this._cancellingBookingId) return
+
+    wx.showModal({
+      title: '取消预约',
+      content: `确定取消 ${booking.visitDate} ${booking.visitTime} 的预约吗？取消后该时段会重新开放。`,
+      confirmText: '确认取消',
+      confirmColor: '#C53030',
+      success: res => {
+        if (!res.confirm) return
+        this._cancellingBookingId = id
+        wx.showLoading({ title: '取消中', mask: true })
+        getApp().cancelBooking(id, '客户主动取消')
+          .then(() => {
+            wx.hideLoading()
+            this._loadUserData()
+            wx.showToast({ title: '预约已取消', icon: 'success' })
+          })
+          .catch(err => {
+            wx.hideLoading()
+            wx.showToast({ title: err.message || '取消失败，请重试', icon: 'none' })
+          })
+          .finally(() => {
+            this._cancellingBookingId = ''
+          })
       }
     })
   },

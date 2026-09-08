@@ -13,7 +13,7 @@ const db = cloud.database()
 const _ = db.command
 
 const TIME_SLOTS = new Set(['9:30-11:30', '13:00-15:00', '15:30-17:30'])
-const TERMINAL_STATUSES = new Set(['cancelled', 'rejected', 'no_show'])
+const TERMINAL_STATUSES = new Set(['cancelled', 'rejected', 'no_show', 'completed', 'expired'])
 const WECOM_BOOKING_WEBHOOK = process.env.WECOM_BOOKING_WEBHOOK || ''
 const PHOTO_FIELDS = [
   '_photos', '_beforePhotos', '_beforeFrontPhotos', '_beforeSidePhotos',
@@ -108,6 +108,26 @@ function validateFutureTime(visitDate, visitTime) {
     return '不能预约已经开始或过去的时段'
   }
   return ''
+}
+
+function bookingStartTimestamp(booking) {
+  const visitDate = cleanText((booking && booking.visitDate) || '', 10)
+  const match = cleanText((booking && booking.visitTime) || '', 20).match(/^(\d{1,2}):(\d{2})/)
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(visitDate) || !match) return NaN
+  return Date.parse(`${visitDate}T${match[1].padStart(2, '0')}:${match[2]}:00+08:00`)
+}
+
+function isPendingExpired(booking) {
+  if (!booking || booking._status !== 'pending_confirm') return false
+  const startAt = bookingStartTimestamp(booking)
+  return Number.isFinite(startAt) && startAt <= Date.now()
+}
+
+function normalizeExpiredBookings(bookings) {
+  ;(bookings || []).forEach(booking => {
+    if (isPendingExpired(booking)) booking._status = 'expired'
+  })
+  return bookings || []
 }
 
 function slotLockId(visitDate, visitTime) {
@@ -279,6 +299,53 @@ async function retryStaffNotify(openId, event) {
   }
 }
 
+// 工作人员删除错误或测试预约，同时释放该预约占用的时段。
+// 删除只影响明确选中的预约；已正常完成但未删除的预约仍继续占用原时段。
+async function deleteBooking(openId, event) {
+  const admin = await getAdmin(openId)
+  if (!admin) return { success: false, error: '无管理员权限' }
+  const bookingId = cleanText(event.bookingId, 40)
+  if (!bookingId) return { success: false, error: '缺少预约编号' }
+
+  const res = await db.collection('bookings').where({ id: bookingId }).limit(1).get()
+  const booking = res.data && res.data[0]
+  if (!booking) return { success: false, error: '预约不存在或已删除' }
+
+  await db.runTransaction(async transaction => {
+    const bookingRef = transaction.collection('bookings').doc(booking._id)
+    const freshRes = await bookingRef.get()
+    const freshBooking = freshRes && freshRes.data
+    if (!freshBooking) throw businessError('BOOKING_NOT_FOUND', '预约不存在')
+
+    const lockId = slotLockId(freshBooking.visitDate || '', freshBooking.visitTime || '')
+    if (freshBooking.visitDate && freshBooking.visitTime) {
+      try {
+        const lockRef = transaction.collection('booking_slots').doc(lockId)
+        const lockRes = await lockRef.get()
+        const lock = lockRes && lockRes.data
+        if (lock && lock.bookingId === freshBooking.id) await lockRef.remove()
+      } catch (err) {
+        if (!isMissingDocumentError(err)) throw err
+      }
+    }
+    await bookingRef.remove()
+  }, 5)
+
+  const fileIDs = [...collectCloudFileIDs(booking)]
+  const consentFile = cleanText(booking.consentSignImage, 500)
+  if (consentFile.indexOf('cloud://') === 0) fileIDs.push(consentFile)
+  if (fileIDs.length) {
+    try {
+      await cloud.deleteFile({ fileList: [...new Set(fileIDs)] })
+    } catch (err) {
+      // 预约与时段已经正确删除，个别云文件清理失败不回滚业务删除。
+      console.warn('[删除预约] 云文件清理失败:', err)
+    }
+  }
+
+  return { success: true, bookingId }
+}
+
 async function createBooking(openId, event) {
   const input = (event && event.data) || {}
   if (input.agreedPrivacy !== true) {
@@ -313,7 +380,7 @@ async function createBooking(openId, event) {
     .where({
       visitDate,
       visitTime,
-      _status: _.nin(['cancelled', 'rejected', 'no_show'])
+      _status: _.nin(['cancelled', 'rejected', 'no_show', 'completed', 'expired'])
     })
     .limit(1)
     .get()
@@ -407,7 +474,21 @@ async function createBooking(openId, event) {
         if (!isMissingDocumentError(err)) throw err
       }
       if (existingLock && existingLock.active !== false) {
-        throw businessError('SLOT_OCCUPIED', '该时段刚刚被预约，请另选时间')
+        // 兼容改造前已经完成、但尚未释放时段锁的预约。
+        // 新版完成体验时会主动删锁；遇到历史完成记录时允许覆盖这条旧锁。
+        let lockedBooking = null
+        const lockedBookingId = cleanText(existingLock.bookingId, 40)
+        if (lockedBookingId) {
+          try {
+            const lockedRes = await transaction.collection('bookings').doc('booking_' + lockedBookingId).get()
+            lockedBooking = lockedRes && lockedRes.data
+          } catch (err) {
+            if (!isMissingDocumentError(err)) throw err
+          }
+        }
+        if (lockedBooking && !TERMINAL_STATUSES.has(lockedBooking._status)) {
+          throw businessError('SLOT_OCCUPIED', '该时段刚刚被预约，请另选时间')
+        }
       }
 
       await transaction.collection('booking_slots').doc(lockId).set({
@@ -476,47 +557,11 @@ async function loadAllBookingsByCondition(condition) {
 }
 
 async function listMine(openId) {
-  const phone = await getVerifiedPhone(openId)
-  const tasks = [
+  const results = await Promise.all([
     loadAllBookingsByCondition({ _openid: openId }),
     loadAllBookingsByCondition({ _creatorOpenId: openId })
-  ]
-  if (phone) tasks.push(loadAllBookingsByCondition({ phone }))
-
-  const results = await Promise.all(tasks)
-  const bookings = mergeUnique(results)
-  const adminCache = {}
-  const now = new Date().toISOString()
-
-  // 已验证手机号与代预约手机号一致时，把尚未绑定或误绑定到操作师的旧预约纠正到客户微信。
-  if (phone) {
-    for (const booking of bookings) {
-      if (booking.phone !== phone || booking._openid === openId) continue
-      const currentOwner = booking._openid || booking._creatorOpenId || ''
-      let ownerIsStaff = false
-      if (currentOwner && currentOwner === booking._createdByOpenId) {
-        if (adminCache[currentOwner] === undefined) {
-          adminCache[currentOwner] = !!(await getAdmin(currentOwner))
-        }
-        ownerIsStaff = adminCache[currentOwner]
-      }
-      if (!currentOwner || ownerIsStaff) {
-        await db.collection('bookings').doc(booking._id).update({
-          data: {
-            _openid: openId,
-            _creatorOpenId: openId,
-            _customerBoundAt: now,
-            updatedAt: now
-          }
-        })
-        booking._openid = openId
-        booking._creatorOpenId = openId
-        booking._customerBoundAt = now
-        booking.updatedAt = now
-      }
-    }
-  }
-
+  ])
+  const bookings = normalizeExpiredBookings(mergeUnique(results))
   const mine = bookings.filter(booking => {
     return booking._openid === openId || booking._creatorOpenId === openId
   })
@@ -636,8 +681,10 @@ async function completeCheckin(openId, event) {
   const gender = cleanText(input.gender || booking.gender, 10)
   const age = cleanText(input.age || booking.age, 3)
   const idCard = cleanText(input.idCard || booking.idCard, 18)
+  const signatureImage = cleanText(input.signatureImage || input.image, 500)
   if (!signName) return { success: false, error: '签署人姓名不能为空' }
   if (idCard && !/^\d{17}[\dXx]$/.test(idCard)) return { success: false, error: '身份证号码格式不正确' }
+  if (signatureImage.indexOf('cloud://') !== 0) return { success: false, error: '请先完成手写签名' }
 
   const now = new Date().toISOString()
   const updated = await db.runTransaction(async transaction => {
@@ -653,7 +700,7 @@ async function completeCheckin(openId, event) {
       checkInAt: now,
       consentSignName: signName,
       consentSignTime: now,
-      consentSignImage: '',
+      consentSignImage: signatureImage,
       consentPhotoAuth1: input.photoAuth1 === true,
       consentPhotoAuth2: input.photoAuth2 === true,
       name: signName,
@@ -673,6 +720,7 @@ async function completeCheckin(openId, event) {
     data: Object.assign(publicCheckinBooking(saved || booking), {
       consentSignName: signName,
       consentSignTime: now,
+      consentSignImage: signatureImage,
       consentPhotoAuth1: input.photoAuth1 === true,
       consentPhotoAuth2: input.photoAuth2 === true
     })
@@ -1026,20 +1074,22 @@ function pickFields(input, allowed) {
 function validStatusChange(booking, next, pendingData) {
   if (!next || next === booking._status) return true
   const transitions = {
-    pending_confirm: ['confirmed', 'rejected'],
+    pending_confirm: ['confirmed', 'rejected', 'cancelled'],
     confirmed: ['visited', 'in_experience', 'cancelled'],
     visited: ['in_experience'],
     in_experience: ['completed'],
     completed: [],
     cancelled: [],
-    rejected: []
+    rejected: [],
+    expired: []
   }
   const allowed = transitions[booking._status] || []
   if (allowed.indexOf(next) === -1) return false
   if (booking._status === 'confirmed' && (next === 'visited' || next === 'in_experience')) {
     const checkedIn = booking.checkInAt || (pendingData && pendingData.checkInAt)
     const consentSigned = booking.consentSignTime || (pendingData && pendingData.consentSignTime)
-    return !!checkedIn && !!consentSigned
+    const signatureImage = booking.consentSignImage || (pendingData && pendingData.consentSignImage)
+    return !!checkedIn && !!consentSigned && !!signatureImage
   }
   return true
 }
@@ -1050,6 +1100,14 @@ async function updateBooking(openId, event) {
   const res = await db.collection('bookings').where({ id: bookingId }).limit(1).get()
   const booking = res.data && res.data[0]
   if (!booking) return { success: false, error: '预约不存在' }
+
+  if (isPendingExpired(booking)) {
+    const now = new Date().toISOString()
+    await db.collection('bookings').doc(booking._id).update({
+      data: { _status: 'expired', _expiredAt: now, updatedAt: now }
+    })
+    return { success: false, error: '预约时间已过期，不能再确认或拒绝' }
+  }
 
   const admin = await getAdmin(openId)
   let data
@@ -1062,7 +1120,7 @@ async function updateBooking(openId, event) {
     if (!owner && !phoneOwner) return { success: false, error: '无权修改该预约' }
     data = pickFields(event.data, USER_FIELDS)
     if (Object.prototype.hasOwnProperty.call(data, '_status')) {
-      const userStatuses = booking._status === 'confirmed'
+      const userStatuses = booking._status === 'pending_confirm' || booking._status === 'confirmed'
         ? ['cancelled']
         : []
       if (userStatuses.indexOf(data._status) === -1) {
@@ -1129,6 +1187,7 @@ exports.main = async (event) => {
     if (event.action === 'saveFollowupPhotos') return await saveFollowupPhotos(openId, event)
     if (event.action === 'getStaffNotifyConfig') return await getStaffNotifyConfig(openId)
     if (event.action === 'retryStaffNotify') return await retryStaffNotify(openId, event)
+    if (event.action === 'delete') return await deleteBooking(openId, event)
     if (event.action === 'update') return await updateBooking(openId, event)
     return { success: false, error: '不支持的操作' }
   } catch (err) {

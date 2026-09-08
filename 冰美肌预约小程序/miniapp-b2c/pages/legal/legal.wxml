@@ -51,7 +51,7 @@
       <view class="list">
         <text class="li">1. 查阅权：您可以在"我的"页面查看您的预约记录和个人信息。</text>
         <text class="li">2. 更正权：如发现信息有误，可联系工作人员更正。</text>
-        <text class="li">3. 删除权：如您希望删除个人信息，请联系客服（15821182307 / 微信 bingmeiji2024），我们将在收到请求后15个工作日内核实并删除您的相关数据。</text>
+        <text class="li">3. 删除权：如您希望删除个人信息，请联系客服（19117352642 / 微信 bingmeiji2024），我们将在收到请求后15个工作日内核实并删除您的相关数据。</text>
         <text class="li">4. 撤回同意：您可随时撤回对个人信息收集使用的同意，但不影响撤回前已进行的处理。</text>
         <text class="li">5. 投诉权：如您认为我们处理您的个人信息侵犯了您的合法权益，可向有关主管部门投诉。</text>
       </view>
@@ -67,7 +67,7 @@
     <view class="section">
       <text class="h2">六、联系我们</text>
       <text class="p">如您对本隐私政策有任何疑问或建议，请通过以下方式联系我们：</text>
-      <text class="p">客服电话：15821182307（周小姐）</text>
+      <text class="p">客服电话：19117352642（周小姐）</text>
       <text class="p">微信号：bingmeiji2024</text>
     </view>
   </scroll-view>

@@ -38,6 +38,7 @@
             <view class="fb-row" wx:if="{{item.reminderText}}"><text class="fb-label">消息提醒</text><text class="fb-value reminder-text">{{item.reminderText}}</text></view>
             <view class="fb-note" wx:if="{{item.followupNote}}">工作人员回访：{{item.followupNote}}</view>
             <view class="fb-note customer" wx:if="{{item.remark}}">客户反馈：{{item.remark}}</view>
+            <view class="fb-detail-hint">点击查看完整评价 ›</view>
           </view>
         </view>
       </view>

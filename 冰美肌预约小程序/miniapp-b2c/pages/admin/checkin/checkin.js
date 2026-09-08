@@ -23,11 +23,11 @@ Page({
       return
     }
     const updates = { booking }
-    if (!booking.consentSignName) {
+    if (!booking.consentSignName || !booking.consentSignImage) {
       updates.needConsent = true
     }
     this.setData(updates)
-    if (booking.consentSignName) this._completeCheckIn()
+    if (booking.consentSignName && booking.consentSignImage) this._completeCheckIn()
   },
 
   onShow() {

@@ -99,6 +99,7 @@
 .status-completed { background: var(--gray-100); color: var(--text-secondary); }
 .status-cancelled { background: var(--red-bg); color: var(--red-dark); }
 .status-rejected { background: var(--red-bg); color: var(--red-dark); }
+.status-expired { background: #F3F4F6; color: #6B7280; }
 
 .card-row {
   display: flex;

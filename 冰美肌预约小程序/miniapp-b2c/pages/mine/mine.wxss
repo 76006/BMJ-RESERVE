@@ -161,6 +161,7 @@
 .completed { background: var(--gray-100); color: var(--text-secondary); }
 .cancelled { background: var(--red-bg); color: var(--red-dark); }
 .rejected { background: var(--red-bg); color: var(--red-dark); }
+.expired { background: #F3F4F6; color: #6B7280; }
 .booking-body { display: flex; flex-direction: column; gap: 12rpx; }
 .booking-row { display: flex; align-items: flex-start; }
 .booking-label {
@@ -192,12 +193,38 @@
   margin-bottom: 4rpx;
   min-height: 68rpx;
 }
+.cancel-booking-action {
+  justify-content: center;
+  margin-top: 14rpx;
+  padding: 12rpx 20rpx;
+  min-height: 60rpx;
+  border-radius: 12rpx;
+  background: #FFF7F7;
+  border: 1rpx solid #FECACA;
+}
+.cancel-booking-text {
+  color: #B91C1C;
+}
 .service-feedback-action {
   margin: 4rpx 0 10rpx;
   padding: 18rpx 20rpx;
   border-radius: 14rpx;
   background: #F5F3FF;
   border: 1rpx solid #DDD6FE;
+}
+.service-feedback-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+  min-width: 0;
+}
+.service-feedback-summary {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-muted);
+  font-size: 22rpx;
 }
 .booking-reminder-action {
   display: flex;
@@ -569,8 +596,14 @@
 }
 .qr-close {
   position: absolute;
-  top: 20rpx;
-  right: 28rpx;
+  top: 12rpx;
+  right: 16rpx;
+  width: 64rpx;
+  height: 64rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
   font-size: 36rpx;
   color: var(--gray-300);
   line-height: 1;
@@ -602,7 +635,12 @@
 .qr-btn {
   flex: 1;
   height: 80rpx;
-  line-height: 80rpx;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: normal;
+  text-align: center;
   font-size: 28rpx;
   border-radius: 12rpx;
   background: var(--gradient);

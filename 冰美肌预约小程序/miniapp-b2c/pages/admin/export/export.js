@@ -21,6 +21,7 @@ Page({
     startDate: '',
     endDate: '',
     today: '',
+    maxDate: '2099-12-31',
     allDates: false,
     rangePreset: 'month',
     rangeLabel: '',
@@ -34,7 +35,7 @@ Page({
     const now = new Date()
     this.setData({
       startDate: localDate(new Date(now.getFullYear(), now.getMonth(), 1)),
-      endDate: localDate(now),
+      endDate: localDate(new Date(now.getFullYear(), now.getMonth() + 1, 0)),
       today: localDate(now)
     })
   },
@@ -82,7 +83,8 @@ Page({
       in_experience: '体验中',
       completed: '已体验',
       cancelled: '已取消',
-      rejected: '已拒绝'
+      rejected: '已拒绝',
+      expired: '已过期'
     }
     const channelMap = { direct: '直接', medical: '医疗', beauty: '生美' }
     const rows = filtered.map(booking => ({
@@ -96,7 +98,7 @@ Page({
       rows,
       total: rows.length,
       allTotal: all.length,
-      rangeLabel: allDates ? '全部日期' : `${startDate || '最早'} 至 ${endDate || '今天'}`
+      rangeLabel: allDates ? '全部日期' : `${startDate || '最早'} 至 ${endDate || '最晚'}`
     })
   },
 
@@ -137,7 +139,7 @@ Page({
     this.dropPreparedFiles()
     this.setData({
       startDate: localDate(new Date(now.getFullYear(), now.getMonth(), 1)),
-      endDate: localDate(now),
+      endDate: localDate(new Date(now.getFullYear(), now.getMonth() + 1, 0)),
       allDates: false,
       rangePreset: 'month',
       tableReady: false,
@@ -271,12 +273,13 @@ Page({
     // 必须由用户的这次点击直接触发，微信才允许发送文件。
     exportFile.shareFile(file.filePath, file.fileName)
       .then(() => {
-        const failedText = summary.failedPhotoCount
-          ? `，${summary.failedPhotoCount}张照片未能读取，详情见资料包内说明`
+        const failedCount = (summary.failedPhotoCount || 0) + (summary.failedSignatureCount || 0)
+        const failedText = failedCount
+          ? `，${failedCount}个图片文件未能读取，详情见资料包内说明`
           : ''
         wx.showModal({
           title: '资料包已发送',
-          content: `已整理${summary.bookingCount || 0}位客户、${summary.photoCount || 0}张照片${failedText}`,
+          content: `已整理${summary.bookingCount || 0}位客户、${summary.photoCount || 0}张照片、${summary.signatureCount || 0}份手写签名${failedText}`,
           showCancel: false
         })
       })

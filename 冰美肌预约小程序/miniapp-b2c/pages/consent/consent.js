@@ -1,3 +1,5 @@
+const signaturePad = require('../../utils/signature-pad')
+
 Page({
   data: {
     // Auto-filled data (merged from URL params + history)
@@ -9,13 +11,29 @@ Page({
     scrolledBottom: false,
     source: 'booking',
     bookingId: '',
+    signDate: '',
     photoAuth1: false,
-    photoAuth2: false
+    photoAuth2: false,
+    signatureHasInk: false,
+    signatureCanvasWidth: 320,
+    signatureCanvasHeight: 160
   },
 
   onLoad(options) {
     const app = getApp()
     const bookingId = options.bookingId || ''
+    let windowWidth = 375
+    try {
+      const windowInfo = wx.getWindowInfo ? wx.getWindowInfo() : wx.getSystemInfoSync()
+      windowWidth = Number(windowInfo.windowWidth) || windowWidth
+    } catch (err) { /* 使用默认画布宽度 */ }
+    const now = new Date()
+    const pad = value => String(value).padStart(2, '0')
+    const signDate = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`
+    this.setData({
+      signDate,
+      signatureCanvasWidth: Math.max(250, Math.floor(windowWidth - 52))
+    })
 
     // 从 URL 参数取基础数据
     const baseData = {
@@ -136,7 +154,25 @@ Page({
       wx.showToast({ title: '请下滑浏览全文至底部', icon: 'none' })
       return
     }
-    this.setData({ allRead: checked })
+    this.setData({ allRead: checked, signatureHasInk: false }, () => {
+      if (checked) signaturePad.setup(this, 'consentSignatureCanvas')
+    })
+  },
+
+  onSignatureStart(e) {
+    signaturePad.touchStart(this, e)
+  },
+
+  onSignatureMove(e) {
+    signaturePad.touchMove(this, e)
+  },
+
+  onSignatureEnd() {
+    signaturePad.touchEnd(this)
+  },
+
+  clearSignature() {
+    signaturePad.clear(this)
   },
 
   togglePhotoAuth1() {
@@ -151,6 +187,10 @@ Page({
       wx.showToast({ title: '请先勾选确认已阅读全部内容', icon: 'none' })
       return
     }
+    if (!this.data.signatureHasInk) {
+      wx.showToast({ title: '请先在签名框内手写签名', icon: 'none' })
+      return
+    }
 
     const app = getApp()
     const signName = this.data.bookingData.name
@@ -160,16 +200,22 @@ Page({
       if (this._submitting) return
       this._submitting = true
       wx.showLoading({ title: '正在保存', mask: true })
+      let uploadedSignature = ''
       // 先回写客户资料，再保存签署结果；两步都成功后才允许签到页继续。
-      app.updateCustomerFields(this.data.bookingId, {
-        name: this.data.bookingData.name,
-        gender: this.data.bookingData.gender,
-        age: this.data.bookingData.age,
-        idCard: this.data.bookingData.idCard
-      })
+      signaturePad.toTempFilePath(this)
+        .then(tempPath => app.uploadImage(tempPath, `consent-signatures/${this.data.bookingId}`))
+        .then(fileID => {
+          uploadedSignature = fileID
+          return app.updateCustomerFields(this.data.bookingId, {
+            name: this.data.bookingData.name,
+            gender: this.data.bookingData.gender,
+            age: this.data.bookingData.age,
+            idCard: this.data.bookingData.idCard
+          })
+        })
         .then(() => app.saveConsent(this.data.bookingId, {
           name: signName,
-          image: '',
+          image: uploadedSignature,
           photoAuth1: this.data.photoAuth1,
           photoAuth2: this.data.photoAuth2
         }))
@@ -183,12 +229,13 @@ Page({
             app.globalData._checkinConsent = {
               bookingId: this.data.bookingId,
               name: signName,
-              image: ''
+              image: uploadedSignature
             }
           }
           wx.navigateBack()
         })
         .catch(err => {
+          // 网络超时并不代表云端未保存，不能在这里删除可能已经绑定的签名图片。
           wx.showToast({ title: err.message || '保存失败，请重试', icon: 'none' })
         })
         .finally(() => {
@@ -197,12 +244,23 @@ Page({
         })
       return
     } else {
-      app.globalData._consentConfirmed = true
-      app.globalData._consentSignName = signName
-      app.globalData._consentSignTime = signTime
-      app.globalData._consentSignImage = ''
+      if (this._submitting) return
+      this._submitting = true
+      wx.showLoading({ title: '正在生成签名', mask: true })
+      signaturePad.toTempFilePath(this).then(tempPath => {
+        app.globalData._consentConfirmed = true
+        app.globalData._consentSignName = signName
+        app.globalData._consentSignTime = signTime
+        app.globalData._consentSignImage = tempPath
+        wx.navigateBack()
+      }).catch(err => {
+        wx.showToast({ title: err.message || '签名生成失败，请重试', icon: 'none' })
+      }).finally(() => {
+        this._submitting = false
+        wx.hideLoading()
+      })
+      return
     }
-    wx.navigateBack()
   },
 
   goAftercare() {

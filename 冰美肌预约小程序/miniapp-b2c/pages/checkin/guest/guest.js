@@ -5,6 +5,8 @@
 //   3. 仍无匹配：进入 not_found，提供“手动选择可签到预约”兜底列表。
 // 数据补全：匹配到手机号后，自动从历史 booking 记录中提取姓名/性别/年龄/身份证等字段
 
+const signaturePad = require('../../../utils/signature-pad')
+
 function parseScene(raw) {
   const result = {}
   if (!raw) return result
@@ -54,10 +56,13 @@ Page({
     // 知情同意书滚动与签署
     scrolledBottom: false,
     allRead: true,
+    signatureHasInk: false,
+    signatureCanvasWidth: 320,
+    signatureCanvasHeight: 160,
 
-    // 摄影授权（默认勾选）
-    photoAuth1: true,
-    photoAuth2: true,
+    // 摄影授权属于单独的可选授权，必须由顾客主动勾选。
+    photoAuth1: false,
+    photoAuth2: false,
 
     // 体验确认弹窗
     showExperienceModal: false,
@@ -69,7 +74,12 @@ Page({
     options = options || {}
     const app = getApp()
     const today = this._fmtDate(new Date())
-    this.setData({ today })
+    let windowWidth = 375
+    try {
+      const windowInfo = wx.getWindowInfo ? wx.getWindowInfo() : wx.getSystemInfoSync()
+      windowWidth = Number(windowInfo.windowWidth) || windowWidth
+    } catch (err) { /* 使用默认画布宽度 */ }
+    this.setData({ today, signatureCanvasWidth: Math.max(260, Math.floor(windowWidth - 54)) })
     // wxacode.getUnlimited 的 scene 在直接打开目标页时由页面 onLoad 接收。
     // 同时兼容普通链接参数和旧版首页中转传入的 id。
     const rawScene = options.scene || (options.query && options.query.scene) || ''
@@ -293,12 +303,19 @@ Page({
     const app = getApp()
     const all = list || app.globalData.bookings || []
     const clean = s => (s || '').replace(/\*/g, '').trim()
+    const activeOpenId = String(app.globalData.openId || '')
+    const verifiedPhone = wx.getStorageSync('_phoneVerified')
+      ? clean(wx.getStorageSync('_userPhone'))
+      : ''
     return all
       .filter(b => {
         if (String(b.visitDate || '') < today) return false
         if (b.checkInAt) return false
         if (b._status !== 'confirmed') return false
-        return true
+        const ownerMatch = !!activeOpenId &&
+          (b._openid === activeOpenId || b._creatorOpenId === activeOpenId)
+        const phoneMatch = !!verifiedPhone && clean(b.phone) === verifiedPhone
+        return ownerMatch || phoneMatch
       })
       .sort((a, b) => {
         const dateResult = String(a.visitDate || '').localeCompare(String(b.visitDate || ''))
@@ -342,7 +359,14 @@ Page({
 
   // 点"确认到店，阅读知情同意书"
   proceedToConsent() {
-    this.setData({ step: 'consent', scrolledBottom: false, allRead: false })
+    this.setData({
+      step: 'consent',
+      scrolledBottom: false,
+      allRead: false,
+      signatureHasInk: false,
+      photoAuth1: false,
+      photoAuth2: false
+    })
   },
 
   // =================== 知情同意书逻辑 ===================
@@ -361,14 +385,32 @@ Page({
 
   toggleAllRead() {
     if (this.data.allRead) {
-      this.setData({ allRead: false })
+      this.setData({ allRead: false, signatureHasInk: false })
       return
     }
     if (!this.data.scrolledBottom) {
       wx.showToast({ title: '请下滑浏览全文至底部', icon: 'none' })
       return
     }
-    this.setData({ allRead: true })
+    this.setData({ allRead: true }, () => {
+      signaturePad.setup(this, 'guestSignatureCanvas')
+    })
+  },
+
+  onSignatureStart(e) {
+    signaturePad.touchStart(this, e)
+  },
+
+  onSignatureMove(e) {
+    signaturePad.touchMove(this, e)
+  },
+
+  onSignatureEnd() {
+    signaturePad.touchEnd(this)
+  },
+
+  clearSignature() {
+    signaturePad.clear(this)
   },
 
   // 摄影授权
@@ -385,6 +427,10 @@ Page({
       wx.showToast({ title: '请先勾选确认已阅读全部内容', icon: 'none' })
       return
     }
+    if (!this.data.signatureHasInk) {
+      wx.showToast({ title: '请先在签名框内手写签名', icon: 'none' })
+      return
+    }
     if (this._submitting) return
     this._submitting = true
 
@@ -392,30 +438,35 @@ Page({
     const booking = this.data.booking
     if (!booking) { this._submitting = false; return }
 
-    wx.showLoading({ title: '正在签到...', mask: true })
-    app.completeGuestCheckin(booking.id, {
-      name: this.data.bookingData.name || booking.name,
-      gender: this.data.bookingData.gender || booking.gender,
-      age: this.data.bookingData.age || booking.age,
-      idCard: this.data.bookingData.idCard || booking.idCard,
-      photoAuth1: this.data.photoAuth1,
-      photoAuth2: this.data.photoAuth2
-    }).then(saved => {
-      wx.hideLoading()
-      const merged = Object.assign({}, booking, saved || {})
-      this.setData({
-        step: 'done',
-        booking: merged,
-        bookingData: Object.assign({}, this.data.bookingData, merged),
-        showExperienceModal: true
+    wx.showLoading({ title: '正在保存签名...', mask: true })
+    signaturePad.toTempFilePath(this)
+      .then(tempPath => app.uploadImage(tempPath, `consent-signatures/${booking.id}`))
+      .then(fileID => {
+        return app.completeGuestCheckin(booking.id, {
+          name: this.data.bookingData.name || booking.name,
+          gender: this.data.bookingData.gender || booking.gender,
+          age: this.data.bookingData.age || booking.age,
+          idCard: this.data.bookingData.idCard || booking.idCard,
+          signatureImage: fileID,
+          photoAuth1: this.data.photoAuth1,
+          photoAuth2: this.data.photoAuth2
+        })
+      }).then(saved => {
+        wx.hideLoading()
+        const merged = Object.assign({}, booking, saved || {})
+        this.setData({
+          step: 'done',
+          booking: merged,
+          bookingData: Object.assign({}, this.data.bookingData, merged),
+          showExperienceModal: true
+        })
+        this._submitting = false
+      }).catch(err => {
+        wx.hideLoading()
+        this._submitting = false
+        // 调用超时并不代表云端未保存，保留已上传签名可避免误删已绑定的有效签名。
+        wx.showToast({ title: err.message || '签名保存失败，请重试', icon: 'none' })
       })
-      this._submitting = false
-    }).catch(err => {
-      wx.hideLoading()
-      this._submitting = false
-      this.setData({ step: 'error' })
-      wx.showToast({ title: err.message || '签到失败，请联系工作人员', icon: 'none' })
-    })
   },
 
   // 拒绝签署

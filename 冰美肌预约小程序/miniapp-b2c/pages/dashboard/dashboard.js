@@ -5,7 +5,8 @@ const STATUS_MAP = {
   in_experience: { label: '体验中', color: '#3B0764' },
   completed: { label: '已体验', color: '#3B0764' },
   cancelled: { label: '已取消', color: '#EF4444' },
-  rejected: { label: '已拒绝', color: '#9CA3AF' }
+  rejected: { label: '已拒绝', color: '#9CA3AF' },
+  expired: { label: '已过期', color: '#6B7280' }
 }
 
 Page({
@@ -65,7 +66,7 @@ Page({
 
   loadData() {
     const app = getApp()
-    const allBookings = app.globalData.bookings || []
+    const allBookings = app.getAllBookings ? app.getAllBookings() : (app.globalData.bookings || [])
     const filtered = this._filterByRange(allBookings, this.data.timeRange)
     this.calcStats(filtered)
     this.calcStatus(filtered)

@@ -161,7 +161,8 @@ Page({
       in_experience: ['completed'],
       completed: [],
       cancelled: [],
-      rejected: []
+      rejected: [],
+      expired: []
     }
     return options[status] || []
   },
@@ -199,6 +200,11 @@ Page({
         .filter(path => !!path)
       wx.previewImage({ current, urls })
     }
+  },
+
+  previewConsentSignature() {
+    const image = this.data.booking && this.data.booking.consentSignImage
+    if (image) wx.previewImage({ current: image, urls: [image] })
   },
 
   _comparePhotoField(type) {
@@ -278,6 +284,26 @@ Page({
   },
 
   closeCancelModal() { this.setData({ showCancelModal: false, cancelReason: '' }) },
+
+  deleteBookingRecord() {
+    const booking = this.data.booking
+    if (!booking || this._actionPending) return
+    wx.showModal({
+      title: '删除预约记录',
+      content: `确定删除“${booking.name || '该客户'}”的预约（${booking.visitDate || '-'} ${booking.visitTime || ''}）吗？相关照片也会删除，此操作不可恢复。`,
+      confirmText: '确认删除',
+      confirmColor: '#C53030',
+      success: res => {
+        if (!res.confirm) return
+        const app = getApp()
+        this._runBookingAction(
+          () => app.deleteBooking(booking.id),
+          '预约已删除',
+          () => wx.navigateBack()
+        )
+      }
+    })
+  },
 
   retryStaffNotify() {
     const booking = this.data.booking
@@ -422,7 +448,7 @@ Page({
     wx.chooseMedia({
       count: 1,
       mediaType: ['image'],
-      sizeType: ['compressed'],
+      sizeType: ['original'],
       sourceType: ['album', 'camera'],
       success: (res) => {
         const photo = { path: res.tempFiles[0].tempFilePath, name: `photo_${Date.now()}.jpg` }
@@ -521,12 +547,13 @@ Page({
     // 必须由用户的这次点击直接调用，微信才允许发送文件。
     exportFile.shareFile(file.filePath, file.fileName)
       .then(() => {
-        const failedText = summary.failedPhotoCount
-          ? `，${summary.failedPhotoCount}张照片未能读取，详情见资料包内说明`
+        const failedCount = (summary.failedPhotoCount || 0) + (summary.failedSignatureCount || 0)
+        const failedText = failedCount
+          ? `，${failedCount}个图片文件未能读取，详情见资料包内说明`
           : ''
         wx.showModal({
           title: '客户资料已发送',
-          content: `资料包包含客户表格和${summary.photoCount || 0}张照片${failedText}`,
+          content: `资料包包含客户表格、${summary.photoCount || 0}张照片和${summary.signatureCount || 0}份手写签名${failedText}`,
           showCancel: false
         })
       })

@@ -28,9 +28,19 @@ const STATUS_MAP = {
   completed: '已体验',
   cancelled: '已取消',
   rejected: '已拒绝',
+  expired: '已过期',
   no_show: '未到店'
 }
 const CHANNEL_MAP = { direct: '直接', medical: '医疗', beauty: '生美' }
+
+function effectiveStatus(booking) {
+  if (!booking || booking._status !== 'pending_confirm') return booking && booking._status
+  const date = String(booking.visitDate || '')
+  const match = String(booking.visitTime || '').match(/^(\d{1,2}):(\d{2})/)
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !match) return booking._status
+  const startAt = Date.parse(`${date}T${match[1].padStart(2, '0')}:${match[2]}:00+08:00`)
+  return Number.isFinite(startAt) && startAt <= Date.now() ? 'expired' : booking._status
+}
 
 function cleanText(value, maxLength) {
   return String(value == null ? '' : value).trim().slice(0, maxLength)
@@ -120,10 +130,19 @@ function collectPhotoJobs(bookings) {
         if (!fileID) return
         jobs.push({
           fileID,
-          archivePath: `${root}/${group.title}/${index + 1}_${angle}.${extensionFor(fileID)}`
+          archivePath: `${root}/${group.title}/${index + 1}_${angle}.${extensionFor(fileID)}`,
+          kind: 'photo'
         })
       })
     })
+    const signatureImage = photoValue(booking.consentSignImage)
+    if (signatureImage) {
+      jobs.push({
+        fileID: signatureImage,
+        archivePath: `${root}/知情同意书/手写签名.${extensionFor(signatureImage)}`,
+        kind: 'signature'
+      })
+    }
   })
   return jobs
 }
@@ -135,7 +154,7 @@ function buildTable(bookings) {
     'ID', '姓名', '性别', '年龄', '身份证号', '手机号', '体验日期', '时间段',
     '过往美容护理经历', '重点改善需求', '来源渠道', '培训师', '状态', '确认人',
     '签到时间', '设备型号', '客户负责人', '累计能量', '发数分配', '最高档位',
-    '产品优化意见', 'Day30回访', 'Day90回访', '内部备注', '签署人', '签署时间',
+    '产品优化意见', 'Day30回访', 'Day90回访', '内部备注', '签署人', '签署时间', '手写签名',
     '创建时间', '更新时间', ...photoHeaders
   ]
   const rows = bookings.map(booking => {
@@ -151,11 +170,12 @@ function buildTable(bookings) {
       bookingIdOf(booking), booking.name, booking.gender, booking.age, booking.idCard || '', booking.phone,
       booking.visitDate, booking.visitTime || '', booking.medicalHistory || '', booking.needs || '',
       CHANNEL_MAP[booking.channel] || booking.channel || '', booking.trainerName || '',
-      STATUS_MAP[booking._status] || booking._status || '', booking._confirmedBy || '',
+      STATUS_MAP[effectiveStatus(booking)] || effectiveStatus(booking) || '', booking._confirmedBy || '',
       booking.checkInAt || '', booking.deviceModel || '', booking._clientManager || '',
       booking._totalEnergy || '', booking._shotDistribution || '', booking._maxLevel || '',
       booking._productFeedback || '', booking._day30FollowUp || '', booking._day90FollowUp || '',
       booking._adminNote || '', booking.consentSignName || '', booking.consentSignTime || '',
+      booking.consentSignImage ? `${root}/知情同意书/手写签名.${extensionFor(booking.consentSignImage)}` : '',
       booking.createdAt || '', booking.updatedAt || '', ...photoPaths
     ]
   })
@@ -227,13 +247,13 @@ async function createArchive(bookings) {
   if (!bookings.length) throw new Error('所选日期范围内没有客户记录')
   const jobs = collectPhotoJobs(bookings)
   if (jobs.length > MAX_PHOTOS) {
-    throw new Error(`当前范围共有${jobs.length}张照片，每次最多导出${MAX_PHOTOS}张，请缩小日期范围`)
+    throw new Error(`当前范围共有${jobs.length}个图片文件，每次最多导出${MAX_PHOTOS}个，请缩小日期范围`)
   }
 
   const token = crypto.randomBytes(8).toString('hex')
   const tempPath = path.join(os.tmpdir(), `booking_export_${token}.zip`)
   const output = fs.createWriteStream(tempPath)
-  // 照片上传时已经压缩过，ZIP只打包不重复压缩，可明显缩短云函数处理时间。
+  // JPG/HEIC 等照片通常已经过相机编码；ZIP只负责归档，不改变原图内容。
   const archive = archiver('zip', { store: true })
   const completed = new Promise((resolve, reject) => {
     output.on('close', resolve)
@@ -246,8 +266,11 @@ async function createArchive(bookings) {
   archive.append(Buffer.from(makeCsv(table.headers, table.rows), 'utf8'), { name: '客户预约明细.csv' })
 
   let addedPhotoCount = 0
+  let addedSignatureCount = 0
   let rawBytes = 0
   const failed = []
+  let failedPhotoCount = 0
+  let failedSignatureCount = 0
   try {
     for (let offset = 0; offset < jobs.length; offset += DOWNLOAD_BATCH_SIZE) {
       const batch = jobs.slice(offset, offset + DOWNLOAD_BATCH_SIZE)
@@ -267,21 +290,24 @@ async function createArchive(bookings) {
 
       const batchBytes = downloaded.reduce((sum, item) => sum + (item.content ? item.content.length : 0), 0)
       if (rawBytes + batchBytes > MAX_RAW_PHOTO_BYTES) {
-        throw new Error('照片总大小超过200MB，请缩小日期范围后分批导出')
+        throw new Error('图片文件总大小超过200MB，请缩小日期范围后分批导出')
       }
       rawBytes += batchBytes
       downloaded.forEach(item => {
         if (item.error) {
           failed.push(`${item.job.archivePath}：${item.error}`)
+          if (item.job.kind === 'signature') failedSignatureCount += 1
+          else failedPhotoCount += 1
           return
         }
         archive.append(item.content, { name: item.job.archivePath })
-        addedPhotoCount += 1
+        if (item.job.kind === 'signature') addedSignatureCount += 1
+        else addedPhotoCount += 1
       })
     }
 
     if (failed.length) {
-      archive.append(Buffer.from('\uFEFF' + failed.join('\r\n'), 'utf8'), { name: '未能导出的照片.txt' })
+      archive.append(Buffer.from('\uFEFF' + failed.join('\r\n'), 'utf8'), { name: '未能导出的图片文件.txt' })
     }
     await archive.finalize()
     await completed
@@ -297,7 +323,9 @@ async function createArchive(bookings) {
       fileName: `冰美肌客户资料${singleName}_${chinaTimestamp()}.zip`,
       bookingCount: bookings.length,
       photoCount: addedPhotoCount,
-      failedPhotoCount: failed.length
+      signatureCount: addedSignatureCount,
+      failedPhotoCount,
+      failedSignatureCount
     }
   } catch (err) {
     try { archive.abort() } catch (abortErr) { /* 忽略中止异常 */ }

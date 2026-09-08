@@ -26,7 +26,7 @@
       <text class="action-label">状态</text>
       <view class="action-value">
         <view class="status-badge status-{{booking._status}}">
-          {{booking._status === 'pending_confirm' ? '新预约' : ''}}{{booking._status === 'confirmed' ? '已预约' : ''}}{{booking._status === 'visited' ? '已到店' : ''}}{{booking._status === 'in_experience' ? '体验中' : ''}}{{booking._status === 'completed' ? '已体验' : ''}}{{booking._status === 'cancelled' ? '已取消' : ''}}{{booking._status === 'rejected' ? '已拒绝' : ''}}
+          {{booking._status === 'pending_confirm' ? '新预约' : ''}}{{booking._status === 'confirmed' ? '已预约' : ''}}{{booking._status === 'visited' ? '已到店' : ''}}{{booking._status === 'in_experience' ? '体验中' : ''}}{{booking._status === 'completed' ? '已体验' : ''}}{{booking._status === 'cancelled' ? '已取消' : ''}}{{booking._status === 'rejected' ? '已拒绝' : ''}}{{booking._status === 'expired' ? '已过期' : ''}}
         </view>
       </view>
       <text class="action-arrow" wx:if="{{statusOptions.length}}">›</text>
@@ -133,6 +133,17 @@
     <view class="info-cell full" wx:if="{{booking.consentPhotoAuth1 || booking.consentPhotoAuth2}}">
       <text class="cell-label">摄影授权</text>
       <text class="cell-value">{{booking.consentPhotoAuth1 ? '✅ 护理存档' : ''}}{{booking.consentPhotoAuth1 && booking.consentPhotoAuth2 ? ' / ' : ''}}{{booking.consentPhotoAuth2 ? '✅ 宣传展示' : ''}}</text>
+    </view>
+    <view class="info-cell full">
+      <text class="cell-label">手写签名</text>
+      <image
+        wx:if="{{booking.consentSignImage}}"
+        class="consent-signature-image"
+        src="{{booking.consentSignImage}}"
+        mode="aspectFit"
+        bindtap="previewConsentSignature"
+      ></image>
+      <text class="cell-value signature-missing" wx:else>历史记录未保存手写签名</text>
     </view>
   </view>
 </view>
@@ -360,6 +371,12 @@
       <button class="btn-save" bindtap="saveFollowUp">保存</button>
     </view>
   </view>
+</view>
+
+<!-- ===== 删除错误/测试预约 ===== -->
+<view class="delete-booking-section" wx:if="{{booking}}">
+  <view class="delete-booking-btn" bindtap="deleteBookingRecord">删除此预约记录</view>
+  <text class="delete-booking-hint">仅用于错误或测试数据；删除后不可恢复，相关照片将一并删除</text>
 </view>
 
 

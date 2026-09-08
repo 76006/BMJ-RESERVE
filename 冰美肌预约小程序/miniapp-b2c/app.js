@@ -15,18 +15,39 @@ const STATUS_MAP = {
   in_experience:   { user: '体验中',   admin: '体验中' },
   completed:       { user: '已体验',   admin: '已体验' },
   cancelled:       { user: '已取消',   admin: '已取消' },
-  rejected:        { user: '预约失败', admin: '已拒绝' }
+  rejected:        { user: '预约失败', admin: '已拒绝' },
+  expired:         { user: '已过期',   admin: '已过期' }
 }
 
 // 预约状态只允许沿业务流程向前推进，避免后台任意跳转或回退。
 const STATUS_TRANSITIONS = {
-  pending_confirm: ['confirmed', 'rejected'],
+  pending_confirm: ['confirmed', 'rejected', 'cancelled'],
   confirmed: ['visited', 'in_experience', 'cancelled'],
   visited: ['in_experience'],
   in_experience: ['completed'],
   completed: [],
   cancelled: [],
-  rejected: []
+  rejected: [],
+  expired: []
+}
+
+function bookingStartTimestamp(booking) {
+  const date = String((booking && booking.visitDate) || '')
+  const match = String((booking && booking.visitTime) || '').match(/^(\d{1,2}):(\d{2})/)
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !match) return NaN
+  return Date.parse(`${date}T${match[1].padStart(2, '0')}:${match[2]}:00+08:00`)
+}
+
+function effectiveBookingStatus(booking) {
+  if (!booking || booking._status !== 'pending_confirm') return booking && booking._status
+  const startAt = bookingStartTimestamp(booking)
+  return Number.isFinite(startAt) && startAt <= Date.now() ? 'expired' : booking._status
+}
+
+function normalizeExpiredBooking(booking) {
+  const status = effectiveBookingStatus(booking)
+  if (booking && status === 'expired' && booking._status !== 'expired') booking._status = 'expired'
+  return booking
 }
 
 function canTransitionStatus(booking, nextStatus) {
@@ -442,7 +463,10 @@ App({
         booking._openid = self.globalData.openId
         booking._creatorOpenId = self.globalData.openId
       }
-      self.globalData.bookings.unshift(booking)
+      // 用本次云端结果替换同编号缓存，避免重复记录或旧数据排在新预约前面。
+      self.globalData.bookings = [booking].concat(
+        (self.globalData.bookings || []).filter(item => item.id !== booking.id)
+      )
       self._saveLocal()
       const ownerOpenId = booking._openid || booking._creatorOpenId || ''
       const verifiedPhone = String(wx.getStorageSync('_userPhone') || '').trim()
@@ -501,7 +525,8 @@ App({
       if (b.id === bookingId) return false
       if (b.visitDate !== date || b.visitTime !== time) return false
       // 只检查活跃预约
-      return b._status === 'pending_confirm' || b._status === 'confirmed' || b._status === 'visited'
+      const status = effectiveBookingStatus(b)
+      return status === 'pending_confirm' || status === 'confirmed' || status === 'visited'
     }).map(b => ({ name: b.name, phone: b.phone }))
   },
 
@@ -558,8 +583,9 @@ App({
         const map = {}
         list.forEach(b => {
           if (b.visitDate !== date) return
-          if (b._status === 'cancelled' || b._status === 'no_show') return
-          map[b.visitTime] = { name: b.name || '', status: b._status || '' }
+          const status = effectiveBookingStatus(b)
+          if (['cancelled', 'no_show', 'rejected', 'completed', 'expired'].includes(status)) return
+          map[b.visitTime] = { name: b.name || '', status: status || '' }
         })
         resolve(map)
       }
@@ -585,6 +611,8 @@ App({
   confirmBooking(bookingId, confirmedBy) {
     const booking = this._find(bookingId)
     if (!booking) return Promise.reject(new Error('预约记录不存在'))
+    normalizeExpiredBooking(booking)
+    if (booking._status === 'expired') return Promise.reject(new Error('预约时间已过期，不能再确认'))
     if (booking._status !== 'pending_confirm') return Promise.reject(new Error('当前状态不可确认'))
     const now = new Date().toISOString()
     return this._commitBookingUpdate(bookingId, {
@@ -603,6 +631,8 @@ App({
   rejectBooking(bookingId, reason) {
     const booking = this._find(bookingId)
     if (!booking) return Promise.reject(new Error('预约记录不存在'))
+    normalizeExpiredBooking(booking)
+    if (booking._status === 'expired') return Promise.reject(new Error('预约时间已过期，无需再拒绝'))
     if (booking._status !== 'pending_confirm') return Promise.reject(new Error('当前状态不可拒绝'))
     const now = new Date().toISOString()
     return this._commitBookingUpdate(bookingId, {
@@ -669,6 +699,7 @@ App({
     if (!booking) return Promise.reject(new Error('预约记录不存在'))
     if (booking._status !== 'confirmed') return Promise.reject(new Error('当前状态不可签到'))
     if (!booking.consentSignTime) return Promise.reject(new Error('请先完成知情同意书签署'))
+    if (!booking.consentSignImage) return Promise.reject(new Error('请先完成手写签名'))
     const now = new Date().toISOString()
     // 签到时间和“已到店”状态一次提交，避免两个请求先后顺序不确定。
     return this._commitBookingUpdate(bookingId, {
@@ -816,6 +847,7 @@ App({
   saveConsent(bookingId, signData) {
     const booking = this._find(bookingId)
     if (!booking) return Promise.reject(new Error('预约记录不存在'))
+    if (!signData || !signData.image) return Promise.reject(new Error('请先完成手写签名'))
     const now = new Date().toISOString()
     return this._commitBookingUpdate(bookingId, {
       consentSignName: signData.name || '',
@@ -876,12 +908,39 @@ App({
   cancelBooking(bookingId, reason) {
     const booking = this._find(bookingId)
     if (!booking) return Promise.reject(new Error('预约记录不存在'))
-    if (booking._status !== 'confirmed') return Promise.reject(new Error('当前状态不可取消'))
+    normalizeExpiredBooking(booking)
+    if (booking._status === 'expired') return Promise.reject(new Error('预约已过期，无需再取消'))
+    if (booking._status !== 'pending_confirm' && booking._status !== 'confirmed') {
+      return Promise.reject(new Error('当前状态不可取消'))
+    }
     const now = new Date().toISOString()
     return this._commitBookingUpdate(bookingId, {
       _status: 'cancelled',
       _cancelReason: reason,
       updatedAt: now
+    })
+  },
+
+  // 工作人员删除错误或测试预约。云端成功删除并释放时段后，再移除本地记录。
+  deleteBooking(bookingId) {
+    const booking = this._find(bookingId)
+    if (!booking) return Promise.reject(new Error('预约记录不存在'))
+    const sys = wx.getSystemInfoSync()
+    if (sys.platform === 'devtools') {
+      this.globalData.bookings = (this.globalData.bookings || []).filter(item => item.id !== bookingId)
+      this._saveLocal()
+      return Promise.resolve({ success: true, localOnly: true })
+    }
+    return wx.cloud.callFunction({
+      name: 'bookingService',
+      data: { action: 'delete', bookingId },
+      timeout: 20000
+    }).then(res => {
+      const result = res.result || {}
+      if (!result.success) throw new Error(result.error || '删除失败')
+      this.globalData.bookings = (this.globalData.bookings || []).filter(item => item.id !== bookingId)
+      this._saveLocal()
+      return result
     })
   },
 
@@ -1112,19 +1171,17 @@ App({
     })
   },
   getAllBookings() {
+    ;(this.globalData.bookings || []).forEach(normalizeExpiredBooking)
     return this.globalData.bookings
   },
 
   getBookingById(id) {
-    return this._find(id)
+    return normalizeExpiredBooking(this._find(id))
   },
 
   // 获取用户可见的体验记录（剥离管理员字段，仅返回当前用户自己的记录）
   getUserBookings() {
     const myOpenId = this.globalData.openId || ''
-    const profile = this.getUserProfile()
-    const myPhone = profile ? profile.phone : ''
-    const cleanPhone = (s) => (s || '').replace(/\*/g, '').trim()
 
     const now = new Date()
     const pad = n => String(n).padStart(2, '0')
@@ -1137,31 +1194,17 @@ App({
 
     return (this.globalData.bookings || [])
       .filter(b => {
-        // 用户视角始终只显示本人预约；管理员查看全部记录只能走管理页面。
+        // 当前预约全部由顾客本人授权创建，用户页只按当前微信 OPENID 认领。
+        // 不再按手机号兜底，避免历史测试数据或重复手机号串到当前用户页面。
         if (myOpenId) {
-          // _openid 是当前预约归属；新预约始终绑定提交预约的本人微信。
-          const ownerOpenId = b._openid || b._creatorOpenId || ''
-          if (ownerOpenId) return ownerOpenId === myOpenId
-
-          // 兼容没有归属字段的旧记录，但必须完整手机号一致，禁止仅后4位匹配。
-          if (myPhone) {
-            const bp = cleanPhone(b.phone)
-            const mp = cleanPhone(myPhone)
-            return !!bp && bp === mp
-          }
-          return false
+          return b._openid === myOpenId || b._creatorOpenId === myOpenId
         }
-        // 仅在无法获取openId的本地降级场景按完整手机号匹配。
-        if (myPhone) {
-          const bp = cleanPhone(b.phone)
-          const mp = cleanPhone(myPhone)
-          if (bp && bp === mp) return true
-        }
-        // 演示数据（无openId且本地模式）- 仅在云端未就绪时显示
+        // 开发工具演示数据没有真实 OPENID，仅在云端未就绪时显示。
         if (!this.globalData._cloudReady && !b._creatorOpenId) return true
         return false
       })
       .map(b => {
+        const bookingStatus = effectiveBookingStatus(b)
         // 客户提前到店时，护理须知、30/90天照片和提醒均从实际签到日开始计算。
         const checkInTimestamp = Date.parse(b.checkInAt || '')
         const serviceDate = Number.isFinite(checkInTimestamp)
@@ -1178,7 +1221,7 @@ App({
         }
         // 护理须知：按时间触发，不受填写状态影响
         const availableAftercares = getAvailable(diff)
-        const canAftercare = availableAftercares.length > 0 && (b._status === 'visited' || b._status === 'in_experience' || b._status === 'completed')
+        const canAftercare = availableAftercares.length > 0 && (bookingStatus === 'visited' || bookingStatus === 'in_experience' || bookingStatus === 'completed')
         const photoUploadStages = []
         if (diff >= 30) photoUploadStages.push({ stage: '30', label: '上传30天照片' })
         if (diff >= 90) photoUploadStages.push({ stage: '90', label: '上传90天照片' })
@@ -1196,10 +1239,10 @@ App({
           })
         }
         const canUploadFollowupPhotos = photoUploadStages.length > 0 &&
-          (b._status === 'visited' || b._status === 'in_experience' || b._status === 'completed')
+          (bookingStatus === 'visited' || bookingStatus === 'in_experience' || bookingStatus === 'completed')
         const reminderStages = []
-        if (b._status === 'pending_confirm') reminderStages.push('appointment')
-        if (['pending_confirm', 'confirmed', 'visited', 'in_experience', 'completed'].includes(b._status)) {
+        if (bookingStatus === 'pending_confirm') reminderStages.push('appointment')
+        if (['pending_confirm', 'confirmed', 'visited', 'in_experience', 'completed'].includes(bookingStatus)) {
           // 与云端30天重试窗口保持一致，失败期间允许客户再次补充订阅授权。
           if (!b._reminder30SentAt && diff < 60) reminderStages.push('day30')
           if (!b._reminder90SentAt && diff < 120) reminderStages.push('day90')
@@ -1219,19 +1262,26 @@ App({
           medicalHistory: b.medicalHistory,
           needs: b.needs,
           createdAt: b.createdAt,
-          userStatus: STATUS_MAP[b._status] ? STATUS_MAP[b._status].user : (console.warn('[数据异常] booking', b.id||b._id, '_status 不是6个合法值之一:', b._status), ''),
+          userStatus: STATUS_MAP[bookingStatus] ? STATUS_MAP[bookingStatus].user : (console.warn('[数据异常] booking', b.id||b._id, '_status 不合法:', bookingStatus), ''),
           canAftercare: canAftercare,
           availableAftercares: availableAftercares,
-          canServiceFeedback: b._status === 'completed',
-          hasServiceFeedback: !!(b._serviceFeedback && b._serviceFeedback.submittedAt),
+          canServiceFeedback: bookingStatus === 'completed',
+          hasServiceFeedback: !!(b._serviceFeedback && (
+            b._serviceFeedback.submittedAt ||
+            b._serviceFeedback.updatedAt ||
+            Number(b._serviceFeedback.overall) > 0
+          )),
+          serviceFeedbackOverall: b._serviceFeedback ? Number(b._serviceFeedback.overall) || 0 : 0,
+          serviceFeedbackComment: b._serviceFeedback ? b._serviceFeedback.comment || '' : '',
           followupQuestionnaireStages: followupQuestionnaireStages,
           canUploadFollowupPhotos: canUploadFollowupPhotos,
           photoUploadStages: photoUploadStages,
           canSubscribeReminders: reminderStages.length > 0,
           reminderStages: reminderStages,
           reminderText: reminderNames.join('、') + '提醒',
-          _status: b._status,
-          _cancelReason: b._cancelReason || ''
+          _status: bookingStatus,
+          _cancelReason: b._cancelReason || '',
+          _rejectReason: b._rejectReason || ''
         }
       })
   },
@@ -1254,7 +1304,7 @@ App({
       b.id || b._id, b.name, b.gender, b.age, b.idCard || '', b.visitDate, b.visitTime || '',
       b.medicalHistory || '', b.needs || '', b.phone,
       channelLabel(b.channel), b.trainerName || '',
-      statusLabel(b._status), b._confirmedBy || '', b.checkInAt || '', b.deviceModel || '',
+      statusLabel(effectiveBookingStatus(b)), b._confirmedBy || '', b.checkInAt || '', b.deviceModel || '',
       b._clientManager, b._totalEnergy, b._shotDistribution, b._maxLevel,
       b._productFeedback || '', b._day30FollowUp || '', b._day90FollowUp || '',
       b._adminNote || '',

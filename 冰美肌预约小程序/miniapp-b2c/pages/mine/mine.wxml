@@ -210,7 +210,7 @@
       <view class="booking-card" wx:for="{{bookings}}" wx:key="id">
         <view class="booking-top">
           <view class="booking-id">#{{index + 1}}</view>
-          <view class="booking-status {{item.userStatus === '新预约' ? 'status-pending-confirm' : ''}} {{item.userStatus === '已预约' ? 'status-confirmed' : ''}} {{item.userStatus === '已到店' ? 'visited' : ''}} {{item.userStatus === '体验中' ? 'in-experience' : ''}} {{item.userStatus === '已体验' ? 'completed' : ''}} {{item.userStatus === '已取消' ? 'cancelled' : ''}} {{item.userStatus === '预约失败' ? 'rejected' : ''}}">{{item.userStatus}}</view>
+          <view class="booking-status {{item.userStatus === '新预约' ? 'status-pending-confirm' : ''}} {{item.userStatus === '已预约' ? 'status-confirmed' : ''}} {{item.userStatus === '已到店' ? 'visited' : ''}} {{item.userStatus === '体验中' ? 'in-experience' : ''}} {{item.userStatus === '已体验' ? 'completed' : ''}} {{item.userStatus === '已取消' ? 'cancelled' : ''}} {{item.userStatus === '预约失败' ? 'rejected' : ''}} {{item.userStatus === '已过期' ? 'expired' : ''}}">{{item.userStatus}}</view>
         </view>
         <view class="booking-confirm-hint" wx:if="{{item.userStatus === '新预约'}}">
           ⏳ 我们将在24小时内确认您的预约时间，请留意通知
@@ -231,10 +231,16 @@
         <!-- 新预约：待门店确认 -->
         <view class="booking-footer" wx:if="{{item.userStatus === '新预约'}}">
           <text class="booking-tap-hint dim">⏳ 待门店确认</text>
+          <view class="booking-action cancel-booking-action" data-id="{{item.id}}" catchtap="cancelOwnBooking">
+            <text class="booking-tap-hint cancel-booking-text">取消预约</text>
+          </view>
         </view>
         <!-- 已预约：按时到店 -->
         <view class="booking-footer" wx:elif="{{item.userStatus === '已预约'}}">
           <text class="booking-tap-hint dim">✅ 已确认，按时到店即可</text>
+          <view class="booking-action cancel-booking-action" data-id="{{item.id}}" catchtap="cancelOwnBooking">
+            <text class="booking-tap-hint cancel-booking-text">取消预约</text>
+          </view>
         </view>
         <!-- 已取消：取消原因 + 重新预约 -->
         <view class="booking-footer" wx:elif="{{item.userStatus === '已取消'}}">
@@ -247,10 +253,17 @@
         <view class="booking-footer" wx:elif="{{item.userStatus === '预约失败'}}">
           <text class="booking-tap-hint dim">{{item._rejectReason ? '原因：' + item._rejectReason : '该预约未通过，请联系门店'}}</text>
         </view>
+        <!-- 待确认预约超过开始时间后自动过期 -->
+        <view class="booking-footer" wx:elif="{{item.userStatus === '已过期'}}">
+          <text class="booking-tap-hint dim">预约时间已过，门店未确认本次预约</text>
+        </view>
         <!-- 已到店/已体验：护理须知和阶段照片 -->
         <view class="booking-footer" wx:elif="{{item._status === 'visited' || item._status === 'in_experience' || item._status === 'completed'}}">
           <view class="booking-action service-feedback-action" wx:if="{{item.canServiceFeedback}}" data-id="{{item.id}}" catchtap="goServiceFeedback">
-            <text class="booking-tap-hint">{{item.hasServiceFeedback ? '查看或修改服务评价' : '评价本次服务'}} →</text>
+            <view class="service-feedback-copy">
+              <text class="booking-tap-hint">{{item.hasServiceFeedback ? '查看或修改24小时评价' : '填写24小时服务评价'}} →</text>
+              <text class="service-feedback-summary" wx:if="{{item.hasServiceFeedback}}">已提交{{item.serviceFeedbackOverall ? ' · 总体 ' + item.serviceFeedbackOverall + '/5' : ''}}{{item.serviceFeedbackComment ? ' · ' + item.serviceFeedbackComment : ''}}</text>
+            </view>
           </view>
           <view
             class="booking-action"

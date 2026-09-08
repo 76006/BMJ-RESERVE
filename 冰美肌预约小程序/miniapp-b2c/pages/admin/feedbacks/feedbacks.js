@@ -62,6 +62,13 @@ function scoreAverage(feedback) {
   return values.length ? (values.reduce((sum, value) => sum + value, 0) / values.length).toFixed(1) : '-'
 }
 
+function hasServiceFeedback(feedback) {
+  if (!feedback || typeof feedback !== 'object') return false
+  return !!feedback.submittedAt || !!feedback.updatedAt ||
+    Number(feedback.overall) > 0 || Number(feedback.recommend) > 0 ||
+    !!String(feedback.comment || '').trim()
+}
+
 function makeRecord(booking, mode, feedback) {
   const field = mode === '30' ? '_day30Photos' : (mode === '90' ? '_day90Photos' : '_immediatePhotos')
   const note = mode === '30' ? booking._day30FollowUp : (mode === '90' ? booking._day90FollowUp : '')
@@ -174,7 +181,7 @@ Page({
     const list = []
     let pendingCount = 0
     bookings.forEach(booking => {
-      if (booking._serviceFeedback && booking._serviceFeedback.submittedAt) {
+      if (hasServiceFeedback(booking._serviceFeedback)) {
         list.push(makeRecord(booking, '24h', booking._serviceFeedback))
       }
       if (booking._followupFeedback30 && booking._followupFeedback30.submittedAt) {

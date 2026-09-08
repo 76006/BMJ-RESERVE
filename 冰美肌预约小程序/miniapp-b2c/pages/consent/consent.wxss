@@ -185,6 +185,48 @@
   color: var(--mid-gray);
   animation: pulse 1.5s ease-in-out infinite;
 }
+
+/* 手写签名 */
+.signature-panel {
+  position: relative;
+  margin: 4rpx 0 24rpx;
+  padding: 20rpx 0 0;
+  border-top: 1rpx solid var(--gray-100);
+}
+.signature-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16rpx;
+}
+.signature-title { display: block; font-size: 27rpx; color: var(--text-primary); font-weight: 600; }
+.signature-subtitle { display: block; margin-top: 6rpx; font-size: 22rpx; color: var(--mid-gray); }
+.signature-clear {
+  flex-shrink: 0;
+  margin-left: 18rpx;
+  padding: 10rpx 16rpx;
+  border-radius: 10rpx;
+  background: #F3F4F6;
+  color: var(--brand-blue);
+  font-size: 24rpx;
+}
+.signature-canvas {
+  display: block;
+  border: 2rpx dashed #AAB8CC;
+  border-radius: 12rpx;
+  background: #FFF;
+  box-sizing: border-box;
+}
+.signature-placeholder {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 66rpx;
+  text-align: center;
+  color: #B7C0CC;
+  font-size: 25rpx;
+  pointer-events: none;
+}
 @keyframes pulse {
   0%, 100% { opacity: 0.4; }
   50% { opacity: 1; }
